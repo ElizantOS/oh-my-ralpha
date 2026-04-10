@@ -1,0 +1,30 @@
+{
+  "task": "oh-my-ralpha",
+  "current_iteration": 6,
+  "max_iterations": 40,
+  "current_focus": "Complete: oh-my-ralpha is packaged, verified, and ready for packaging",
+  "completed_todos": ["R-01", "R-02", "R-03", "R-04", "R-05", "R-06"],
+  "next_todo": null,
+  "blocked_todos": [],
+  "verification_evidence": {
+    "build": "npm run build passed in the source oh-my-codex packaging workspace",
+    "targeted_tests": "targeted skill contract and routing checks passed before extraction",
+    "skill_validation": "validateSkillFile('./skills/oh-my-ralpha/SKILL.md') -> repo-skill-ok",
+    "runtime_assertions": "detectKeywords('$ralpha continue the backlog') resolves to oh-my-ralpha; detectPrimaryKeyword('我们继续处理这个 backlog') resolves to oh-my-ralpha",
+    "architect_verdict": "APPROVED for packaging readiness",
+    "reviewer_verdict": "No findings. Ready for packaging."
+  },
+  "remaining_todos": [],
+  "done_when": [
+    "Ralph inheritance matrix is complete",
+    "oh-my-ralpha keeps Ralph full execution skeleton while adding .codex/oh-my-ralpha truth-source specialization",
+    "routing/stateful-mode/execution-gate plumbing is wired",
+    "contract tests are green",
+    "final review says ready for packaging"
+  ],
+  "final_verdict": "APPROVED",
+  "notes": [
+    "This standalone repo packages the extracted skill surface rather than the full oh-my-codex runtime.",
+    "Audit artifacts are optional but must stay consistent with workboard, rounds, and verdict when present."
+  ]
+}

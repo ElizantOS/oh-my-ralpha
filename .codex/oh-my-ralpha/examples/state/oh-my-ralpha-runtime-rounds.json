@@ -1,0 +1,34 @@
+{
+  "task": "oh-my-ralpha-runtime",
+  "current_iteration": 1,
+  "max_iterations": 10,
+  "current_focus": "Complete: standalone release audit passed and package is ready for release",
+  "completed_todos": ["P0-01", "P0-02", "P0-03", "P1-01", "P1-02", "P2-01", "P2-02", "P2-03"],
+  "next_todo": null,
+  "blocked_todos": [],
+  "verification_evidence": {
+    "p0_build_and_tests": "npm test passed 23/23",
+    "p0_installed_launcher": "installed launcher smoke passed using the runtime under CODEX_HOME/skills/oh-my-ralpha",
+    "p0_route_gate": "installed launcher route smoke returned gateApplied true and finalSkill ralplan for '$ralpha fix this'",
+    "p0_architect_verdict": "APPROVED for this P0 milestone with one documentation drift fixed afterward",
+    "p1_setup_tests": "npm test passed 27/27 after setup/uninstall/native-hook integration",
+    "p1_project_setup": "node ./bin/oh-my-ralpha.js setup --scope project --force created .codex/config.toml and .codex/hooks.json",
+    "p1_native_hook_smoke": "UserPromptSubmit native hook returned additionalContext for an underspecified $ralpha prompt",
+    "p1_architect_verdict": "APPROVED for the P1-01 milestone",
+    "p1_mcp_tests": "npm test passed 34/34 after MCP integration, stdio smoke, and project-scope doctor fixes",
+    "p1_mcp_setup_smoke": "project-scope setup wrote oh_my_ralpha_state/trace/runtime sections into .codex/config.toml",
+    "p1_mcp_architect_verdict": "APPROVED for the P1-02 milestone",
+    "p2_verify_tests": "npm test passed 35/35 after verify command and installed-MCP handshake fixes",
+    "p2_verify_smoke": "node ./bin/oh-my-ralpha.js verify --scope project returned ok true",
+    "p2_doctor_ux": "doctor now reports project-scope MCP visibility and PATH remediation suggestions",
+    "p2_release_reviewer_verdict": "READY FOR RELEASE"
+  },
+  "remaining_todos": [],
+  "done_when": [
+    "Installed runtime is relocatable",
+    "Plan-first gate remains effective for vague prompts",
+    "initWorkspace returns only valid artifact paths",
+    "Targeted tests and final review are green"
+  ],
+  "final_verdict": "READY_FOR_RELEASE"
+}

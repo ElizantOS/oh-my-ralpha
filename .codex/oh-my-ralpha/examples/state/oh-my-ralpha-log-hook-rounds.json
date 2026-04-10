@@ -1,0 +1,23 @@
+{
+  "task": "oh-my-ralpha-log-hook",
+  "current_iteration": 1,
+  "max_iterations": 10,
+  "current_focus": "Complete: @LOG session-debug hook is implemented and ready to ship",
+  "completed_todos": ["L0-01", "L0-02", "L0-03", "L1-01", "L1-02"],
+  "next_todo": null,
+  "blocked_todos": [],
+  "verification_evidence": {
+    "full_regression": "npm test passed 46/46",
+    "user_setup": "node ./bin/oh-my-ralpha.js setup --scope user --force succeeded and doctor --scope user reports notify/MCP ok",
+    "session_log_smoke": "@LOG activation returned a session log path; notify/tool/stop capture is covered by tests and direct module smoke",
+    "feature_reviewer_verdict": "READY TO SHIP"
+  },
+  "remaining_todos": [],
+  "done_when": [
+    "@LOG enables session-scoped logging",
+    "tool hooks and notify payloads are recorded while logging is active",
+    "setup/uninstall own the new config safely",
+    "tests and docs cover the feature"
+  ],
+  "final_verdict": "READY_TO_SHIP"
+}

@@ -1,0 +1,15 @@
+node_modules/
+
+.codex/*
+!.codex/oh-my-ralpha/
+!.codex/oh-my-ralpha/**
+
+.codex/config.toml
+.codex/hooks.json
+.codex/bin/
+.codex/skills/
+
+.codex/oh-my-ralpha/working-model/logs/
+.codex/oh-my-ralpha/working-model/state/ralph-state.json
+.codex/oh-my-ralpha/working-model/state/ralph-progress.json
+.codex/oh-my-ralpha/working-model/tmux-hook.json
