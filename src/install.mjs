@@ -15,6 +15,7 @@ const EXTRA_RUNTIME_ENTRIES = [
   'package.json',
   'bin',
   'src',
+  'companions',
   '.codex/oh-my-ralpha',
   'test',
   'docs',

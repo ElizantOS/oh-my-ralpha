@@ -1,0 +1,6 @@
+.git
+.omx
+node_modules
+npm-debug.log
+.DS_Store
+docker/ubuntu-codex/.cache

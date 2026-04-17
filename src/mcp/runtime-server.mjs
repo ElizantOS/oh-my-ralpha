@@ -5,7 +5,6 @@ import { doctorReport } from '../doctor.mjs';
 import { initWorkspace } from '../init.mjs';
 import { scaffoldInterview, scaffoldPlan } from '../planning.mjs';
 import { routePrompt } from '../router.mjs';
-import { disableSessionLog, readSessionLogEntries, readSessionLogState } from '../session-log.mjs';
 import { setupCodexIntegration, uninstallCodexIntegration } from '../setup.mjs';
 import { runtimeRootFromModule } from '../paths.mjs';
 
@@ -111,7 +110,7 @@ const server = createMcpServer({
     ),
     createTool(
       'interview_scaffold',
-      'Create a deep-interview scaffold',
+      'Create an interview scaffold',
       {
         type: 'object',
         properties: {
@@ -172,72 +171,6 @@ const server = createMcpServer({
           cwd: resolveToolCwd(args),
           codexHome: args.codexHome,
           scope: args.scope ?? 'user',
-        });
-      },
-    ),
-    createTool(
-      'log_status',
-      'Read the current oh-my-ralpha session-log status',
-      {
-        type: 'object',
-        properties: {
-          cwd: { type: 'string' },
-          workingDirectory: { type: 'string' },
-          sessionId: { type: 'string' },
-          threadId: { type: 'string' },
-        },
-      },
-      async (args) => {
-        return await readSessionLogState({
-          cwd: resolveToolCwd(args),
-          sessionId: args.sessionId,
-          threadId: args.threadId,
-        });
-      },
-    ),
-    createTool(
-      'log_show',
-      'Read oh-my-ralpha session-log entries',
-      {
-        type: 'object',
-        properties: {
-          cwd: { type: 'string' },
-          workingDirectory: { type: 'string' },
-          sessionId: { type: 'string' },
-          threadId: { type: 'string' },
-          limit: { type: 'integer' },
-        },
-      },
-      async (args) => {
-        return await readSessionLogEntries({
-          cwd: resolveToolCwd(args),
-          sessionId: args.sessionId,
-          threadId: args.threadId,
-          limit: args.limit,
-        });
-      },
-    ),
-    createTool(
-      'log_disable',
-      'Disable oh-my-ralpha session logging for a session/thread scope',
-      {
-        type: 'object',
-        properties: {
-          cwd: { type: 'string' },
-          workingDirectory: { type: 'string' },
-          sessionId: { type: 'string' },
-          threadId: { type: 'string' },
-          turnId: { type: 'string' },
-          reason: { type: 'string' },
-        },
-      },
-      async (args) => {
-        return await disableSessionLog({
-          cwd: resolveToolCwd(args),
-          sessionId: args.sessionId,
-          threadId: args.threadId,
-          turnId: args.turnId,
-          reason: args.reason ?? 'mcp-disable',
         });
       },
     ),

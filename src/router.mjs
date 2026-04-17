@@ -1,16 +1,16 @@
 import { join } from 'node:path';
 import { detectOhMyRalpha, detectPrimaryKeyword, isUnderspecifiedForExecution } from './keywords.mjs';
-import { isPlanningComplete } from './planning.mjs';
+import { readPlanningArtifacts } from './planning.mjs';
 import { writeJson } from './json-file.mjs';
-import { omxStateDir } from './paths.mjs';
+import { workingModelStateDir } from './paths.mjs';
 import { writeModeState } from './state.mjs';
 import { appendTraceEvent } from './trace.mjs';
 
 export function getSkillActiveStatePath(cwd, sessionId) {
   if (sessionId) {
-    return join(omxStateDir(cwd), 'sessions', sessionId, 'skill-active-state.json');
+    return join(workingModelStateDir(cwd), 'sessions', sessionId, 'skill-active-state.json');
   }
-  return join(omxStateDir(cwd), 'skill-active-state.json');
+  return join(workingModelStateDir(cwd), 'skill-active-state.json');
 }
 
 export async function recordSkillActivation({
@@ -19,6 +19,7 @@ export async function recordSkillActivation({
   sessionId,
   threadId,
   turnId,
+  phase = 'execution',
   nowIso = new Date().toISOString(),
 }) {
   const match = detectPrimaryKeyword(text);
@@ -29,7 +30,7 @@ export async function recordSkillActivation({
     active: true,
     skill: match.skill,
     keyword: match.keyword,
-    phase: 'planning',
+    phase,
     activated_at: nowIso,
     updated_at: nowIso,
     source: 'oh-my-ralpha-router',
@@ -38,7 +39,7 @@ export async function recordSkillActivation({
     turn_id: turnId,
     active_skills: [{
       skill: match.skill,
-      phase: 'planning',
+      phase,
       active: true,
       activated_at: nowIso,
       updated_at: nowIso,
@@ -50,7 +51,7 @@ export async function recordSkillActivation({
 
   await writeJson(getSkillActiveStatePath(cwd, sessionId), state);
 
-  if (match.skill === 'oh-my-ralpha') {
+  if (match.skill === 'oh-my-ralpha' && phase === 'execution') {
     await writeModeState({
       cwd,
       mode: 'oh-my-ralpha',
@@ -71,6 +72,7 @@ export async function recordSkillActivation({
     metadata: {
       skill: match.skill,
       keyword: match.keyword,
+      phase,
       sessionId,
       threadId,
       turnId,
@@ -91,21 +93,31 @@ export async function routePrompt({
 }) {
   const match = detectOhMyRalpha(text);
   if (!match) {
-    return { matched: false, gateApplied: false, finalSkill: null };
+    return {
+      matched: false,
+      gateApplied: false,
+      finalSkill: null,
+      phase: null,
+      planningArtifactsComplete: false,
+      planningArtifacts: null,
+    };
   }
 
-  const planningComplete = await isPlanningComplete(cwd);
+  const planningArtifacts = await readPlanningArtifacts(cwd);
+  const planningComplete = planningArtifacts.complete;
   const gateApplied = isUnderspecifiedForExecution(text);
-  const finalSkill = gateApplied ? 'ralplan' : 'oh-my-ralpha';
+  const phase = !gateApplied && planningComplete ? 'execution' : 'planning';
+  const finalSkill = phase === 'execution' ? 'oh-my-ralpha' : 'ralplan';
 
   let activation = null;
-  if (activate && !gateApplied) {
+  if (activate) {
     activation = await recordSkillActivation({
       cwd,
       text,
       sessionId,
       threadId,
       turnId,
+      phase,
     });
   }
 
@@ -113,8 +125,11 @@ export async function routePrompt({
     matched: true,
     detected: match,
     planningComplete,
+    planningArtifactsComplete: planningComplete,
+    planningArtifacts,
     gateApplied,
     finalSkill,
+    phase,
     activation,
   };
 }

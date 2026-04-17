@@ -1,39 +1,12 @@
 import { mkdir } from 'node:fs/promises';
-import { omxContextDir, omxPlansDir, omxStateDir } from './paths.mjs';
+import { initWorkspace } from './init.mjs';
+import { readPlanningArtifacts, scaffoldPlan } from './planning.mjs';
+import { workingModelContextDir, workingModelPlansDir, workingModelStateDir } from './paths.mjs';
 import { routePrompt } from './router.mjs';
 import { readModeState } from './state.mjs';
-import {
-  appendSessionLogEvent,
-  containsLogDisableDirective,
-  containsLogEnableDirective,
-  disableSessionLog,
-  enableSessionLog,
-  stripLogDirectives,
-} from './session-log.mjs';
 
 function safeString(value) {
   return typeof value === 'string' ? value : '';
-}
-
-function readTranscriptPath(payload) {
-  return safeString(payload.transcript_path || payload.transcriptPath).trim() || undefined;
-}
-
-function readSessionOwnerPid(payload) {
-  const candidates = [
-    payload.session_pid,
-    payload.sessionPid,
-    payload.codex_pid,
-    payload.codexPid,
-    payload.parent_pid,
-    payload.parentPid,
-  ];
-  for (const candidate of candidates) {
-    const value = safeString(candidate).trim();
-    if (value) return value;
-    if (typeof candidate === 'number' && Number.isFinite(candidate)) return String(candidate);
-  }
-  return undefined;
 }
 
 function readHookEventName(payload) {
@@ -53,6 +26,81 @@ function readPromptText(payload) {
   return '';
 }
 
+function readSessionId(payload) {
+  return safeString(payload.session_id || payload['session-id']).trim() || undefined;
+}
+
+function normalizePhase(value) {
+  return safeString(value).trim().toLowerCase();
+}
+
+function readNestedState(state) {
+  return state?.state && typeof state.state === 'object' && !Array.isArray(state.state)
+    ? state.state
+    : {};
+}
+
+function readResumeTarget(state) {
+  const nested = readNestedState(state);
+  for (const value of [
+    nested.next_todo,
+    nested.current_slice,
+    state?.next_todo,
+    state?.current_slice,
+  ]) {
+    const text = safeString(value).trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function isTerminalPhase(phase) {
+  return ['complete', 'failed', 'cancelled'].includes(phase);
+}
+
+function artifactStatusLine(label, entry) {
+  const status = entry?.complete ? 'complete' : 'needs completion';
+  const path = entry?.path ? ` (${entry.path})` : '';
+  return `- ${label}: ${status}${path}`;
+}
+
+async function ensurePlanningArtifacts(cwd, task) {
+  const init = await initWorkspace({ cwd, task });
+  const plan = await scaffoldPlan({ cwd, task });
+  return {
+    init,
+    plan,
+    artifacts: await readPlanningArtifacts(cwd),
+  };
+}
+
+function planningContext(result, ensuredPlanning) {
+  if (result.phase !== 'planning') {
+    return 'oh-my-ralpha detected. Read the existing .codex/oh-my-ralpha state/todo/rounds artifacts and continue from the active slice instead of restarting discovery.';
+  }
+
+  const artifacts = ensuredPlanning?.artifacts ?? result.planningArtifacts;
+  const status = artifacts?.status;
+  const lines = [
+    result.gateApplied
+      ? 'oh-my-ralpha detected an underspecified execution prompt and activated planning phase.'
+      : 'oh-my-ralpha detected an execution-shaped prompt, but planning artifacts are not decision-complete; staying in planning phase.',
+    'Work only on planning: inspect context, refine PRD/test-spec/workboard/rounds, and avoid product-code edits or implementation commands.',
+    'Do not enter execution until planning artifacts are decision-complete and the next user prompt is execution-specific.',
+  ];
+
+  if (status) {
+    lines.push('Planning artifact status:');
+    lines.push(artifactStatusLine('context', status.context));
+    lines.push(artifactStatusLine('todo', status.todo));
+    lines.push(artifactStatusLine('rounds', status.rounds));
+    lines.push(artifactStatusLine('PRD', status.prd));
+    lines.push(artifactStatusLine('test spec', status.testSpec));
+  }
+
+  return lines.join('\n');
+}
+
 async function readStdinJson() {
   const chunks = [];
   for await (const chunk of process.stdin) {
@@ -63,9 +111,9 @@ async function readStdinJson() {
 }
 
 async function buildSessionStartOutput(cwd) {
-  await mkdir(omxContextDir(cwd), { recursive: true });
-  await mkdir(omxStateDir(cwd), { recursive: true });
-  await mkdir(omxPlansDir(cwd), { recursive: true });
+  await mkdir(workingModelContextDir(cwd), { recursive: true });
+  await mkdir(workingModelStateDir(cwd), { recursive: true });
+  await mkdir(workingModelPlansDir(cwd), { recursive: true });
   return {
     hookSpecificOutput: {
       hookEventName: 'SessionStart',
@@ -77,66 +125,26 @@ async function buildSessionStartOutput(cwd) {
 async function buildPromptSubmitOutput(payload, cwd) {
   const text = readPromptText(payload);
   if (!text) return null;
-  const sessionId = safeString(payload.session_id || payload['session-id']) || undefined;
+  const sessionId = readSessionId(payload);
   const threadId = safeString(payload.thread_id || payload['thread-id']) || undefined;
   const turnId = safeString(payload.turn_id || payload['turn-id']) || undefined;
-  const transcriptPath = readTranscriptPath(payload);
-  const sessionOwnerPid = readSessionOwnerPid(payload);
 
   const messages = [];
 
-  if (containsLogDisableDirective(text)) {
-    await disableSessionLog({
-      cwd,
-      sessionId,
-      threadId,
-      turnId,
-      transcriptPath,
-      sessionOwnerPid,
-      reason: '@UNLOG',
-    });
-    messages.push('oh-my-ralpha session logging disabled for this session.');
-  }
-
-  if (containsLogEnableDirective(text)) {
-    const state = await enableSessionLog({
-      cwd,
-      sessionId,
-      threadId,
-      turnId,
-      prompt: text,
-      transcriptPath,
-      sessionOwnerPid,
-    });
-    messages.push(`oh-my-ralpha session logging enabled. Log file: ${state.log_file_path}`);
-  }
-
   const result = await routePrompt({
     cwd,
-    text: stripLogDirectives(text),
+    text,
     sessionId,
     threadId,
     turnId,
     activate: true,
   });
   if (result.matched) {
-    messages.push(
-      result.gateApplied
-        ? 'oh-my-ralpha detected an underspecified execution prompt. Do planning first and refresh PRD/test-spec artifacts before direct execution.'
-        : 'oh-my-ralpha detected. Read the existing .codex/oh-my-ralpha state/todo/rounds artifacts and continue from the active slice instead of restarting discovery.',
-    );
+    const ensuredPlanning = result.phase === 'planning'
+      ? await ensurePlanningArtifacts(cwd, text)
+      : null;
+    messages.push(planningContext(result, ensuredPlanning));
   }
-
-  await appendSessionLogEvent({
-    cwd,
-    sessionId,
-    threadId,
-    transcriptPath,
-    sessionOwnerPid,
-    channel: 'native-hook',
-    eventName: 'UserPromptSubmit',
-    payload,
-  });
 
   if (messages.length === 0) return null;
 
@@ -148,58 +156,57 @@ async function buildPromptSubmitOutput(payload, cwd) {
   };
 }
 
-async function buildPreToolUseOutput(payload, cwd) {
-  const sessionId = safeString(payload.session_id || payload['session-id']) || undefined;
-  const threadId = safeString(payload.thread_id || payload['thread-id']) || undefined;
-  await appendSessionLogEvent({
-    cwd,
-    sessionId,
-    threadId,
-    transcriptPath: readTranscriptPath(payload),
-    sessionOwnerPid: readSessionOwnerPid(payload),
-    channel: 'native-hook',
-    eventName: 'PreToolUse',
-    payload,
-  });
-  return null;
-}
+async function readStopModeState(payload, cwd) {
+  const sessionId = readSessionId(payload);
+  if (sessionId) {
+    const sessionState = await readModeState({ cwd, mode: 'oh-my-ralpha', sessionId });
+    if (sessionState) {
+      return {
+        state: sessionState,
+        scope: `session ${sessionId}`,
+      };
+    }
+  }
 
-async function buildPostToolUseOutput(payload, cwd) {
-  const sessionId = safeString(payload.session_id || payload['session-id']) || undefined;
-  const threadId = safeString(payload.thread_id || payload['thread-id']) || undefined;
-  await appendSessionLogEvent({
-    cwd,
-    sessionId,
-    threadId,
-    transcriptPath: readTranscriptPath(payload),
-    sessionOwnerPid: readSessionOwnerPid(payload),
-    channel: 'native-hook',
-    eventName: 'PostToolUse',
-    payload,
-  });
-  return null;
+  return {
+    state: await readModeState({ cwd, mode: 'oh-my-ralpha' }),
+    scope: 'workspace',
+  };
 }
 
 async function buildStopOutput(payload, cwd) {
-  await appendSessionLogEvent({
-    cwd,
-    sessionId: safeString(payload.session_id || payload['session-id']) || undefined,
-    threadId: safeString(payload.thread_id || payload['thread-id']) || undefined,
-    transcriptPath: readTranscriptPath(payload),
-    sessionOwnerPid: readSessionOwnerPid(payload),
-    channel: 'native-hook',
-    eventName: 'Stop',
-    payload,
-  });
-  const state = await readModeState({ cwd, mode: 'oh-my-ralpha' });
+  const { state, scope } = await readStopModeState(payload, cwd);
+  const phase = normalizePhase(state?.current_phase);
+
+  if (state?.active === false && phase && !isTerminalPhase(phase)) {
+    return {
+      decision: 'block',
+      reason: `oh-my-ralpha ${scope} mode has inactive non-terminal state (${phase}). Use active:true with current_phase:"paused" and resume state for pauses, or active:false only for complete/failed/cancelled terminal states.`,
+    };
+  }
+
   if (state?.active === true) {
-    const phase = safeString(state.current_phase).trim().toLowerCase();
-    if (!['complete', 'failed', 'cancelled'].includes(phase)) {
+    if (phase === 'paused') {
+      const resumeTarget = readResumeTarget(state);
+      const pauseReason = safeString(state.pause_reason).trim() || 'unspecified';
+      if (!resumeTarget) {
+        return {
+          decision: 'block',
+          reason: `oh-my-ralpha ${scope} mode is paused but missing resume state. Add state.next_todo or state.current_slice before stopping.`,
+        };
+      }
       return {
-        decision: 'block',
-        reason: `oh-my-ralpha mode is still active (${phase || 'executing'}). Finish verification and cleanup before stopping.`,
+        hookSpecificOutput: {
+          hookEventName: 'Stop',
+          additionalContext: `oh-my-ralpha ${scope} mode is paused and resumable. resume_target: ${resumeTarget}. pause_reason: ${pauseReason}.`,
+        },
       };
     }
+
+    return {
+      decision: 'block',
+      reason: `oh-my-ralpha ${scope} mode is still active (${phase || 'executing'}). Stop protection only prevents uncleared active state; it is not a substitute for fresh evidence, architect/code-reviewer/code-simplifier slice acceptance, final deslop, or post-deslop regression.`,
+    };
   }
   return null;
 }
@@ -208,8 +215,6 @@ export async function dispatchNativeHook(payload) {
   const cwd = safeString(payload.cwd).trim() || process.cwd();
   const eventName = readHookEventName(payload);
   if (eventName === 'SessionStart') return buildSessionStartOutput(cwd);
-  if (eventName === 'PreToolUse') return buildPreToolUseOutput(payload, cwd);
-  if (eventName === 'PostToolUse') return buildPostToolUseOutput(payload, cwd);
   if (eventName === 'UserPromptSubmit') return buildPromptSubmitOutput(payload, cwd);
   if (eventName === 'Stop') return buildStopOutput(payload, cwd);
   return null;

@@ -1,11 +1,10 @@
-import { readFile, access } from 'node:fs/promises';
+import { readFile, access, mkdtemp } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { doctorReport } from './doctor.mjs';
 import { dispatchNativeHook } from './native-hook.mjs';
-import { handleNotifyPayload } from './notify.mjs';
-import { enableSessionLog, readSessionLogEntries } from './session-log.mjs';
 
 function encodeMessage(payload) {
   const body = Buffer.from(JSON.stringify(payload), 'utf-8');
@@ -117,16 +116,11 @@ export async function verifyInstallation({
       await access(hooksPath);
       return hooksPath;
     }),
-    check('notify_configured', async () => {
-      if (!report.checks.notifyConfigured) {
-        throw new Error('notify is not configured');
-      }
-      return 'notify configured';
-    }),
     check('native_hook_prompt_submit', async () => {
+      const hookCwd = await mkdtemp(join(tmpdir(), 'oh-my-ralpha-verify-hook-'));
       const output = await dispatchNativeHook({
         hook_event_name: 'UserPromptSubmit',
-        cwd,
+        cwd: hookCwd,
         prompt: '$ralpha fix this',
       });
       if (!output?.hookSpecificOutput?.additionalContext) {
@@ -134,92 +128,11 @@ export async function verifyInstallation({
       }
       return output.hookSpecificOutput.additionalContext;
     }),
-    check('notify_log_capture', async () => {
-      const sessionId = 'verify-log-session';
-      await enableSessionLog({
-        cwd,
-        sessionId,
-        threadId: 'verify-thread',
-        turnId: 'verify-turn',
-        prompt: '@LOG verify logging',
-      });
-      await handleNotifyPayload({
-        cwd,
-        session_id: sessionId,
-        thread_id: 'verify-thread',
-        type: 'agent-turn-complete',
-        'turn-id': 'verify-turn-2',
-        'input-messages': ['hello'],
-        'last-assistant-message': 'world',
-      });
-      const entries = await readSessionLogEntries({
-        cwd,
-        sessionId,
-      });
-      if (!entries.some((entry) => entry.channel === 'notify' && entry.event_name === 'agent-turn-complete')) {
-        throw new Error('notify event was not captured in the session log');
-      }
-      return entries.length;
-    }),
-    check('tool_hook_log_capture', async () => {
-      const sessionId = 'verify-tool-log-session';
-      await enableSessionLog({
-        cwd,
-        sessionId,
-        threadId: 'verify-thread',
-        turnId: 'verify-turn',
-        prompt: '@LOG verify tool logging',
-      });
-      await dispatchNativeHook({
-        hook_event_name: 'PreToolUse',
-        cwd,
-        session_id: sessionId,
-        thread_id: 'verify-thread',
-        tool_name: 'Bash',
-        tool_use_id: 'tool-1',
-        tool_input: { command: 'echo hi' },
-      });
-      await dispatchNativeHook({
-        hook_event_name: 'PostToolUse',
-        cwd,
-        session_id: sessionId,
-        thread_id: 'verify-thread',
-        tool_name: 'Bash',
-        tool_use_id: 'tool-1',
-        tool_input: { command: 'echo hi' },
-        tool_response: { stdout: 'hi', stderr: '', exit_code: 0 },
-      });
-      const entries = await readSessionLogEntries({
-        cwd,
-        sessionId,
-      });
-      if (!entries.some((entry) => entry.event_name === 'PreToolUse')) {
-        throw new Error('PreToolUse was not captured in the session log');
-      }
-      if (!entries.some((entry) => entry.event_name === 'PostToolUse')) {
-        throw new Error('PostToolUse was not captured in the session log');
-      }
-      return entries.length;
-    }),
-    check('mcp_state_handshake', async () => {
-      const scriptPath = findServerPath(configContent, 'oh_my_ralpha_state');
-      if (!scriptPath) throw new Error('state server path missing from config');
+    check('mcp_handshake', async () => {
+      const scriptPath = findServerPath(configContent, 'oh_my_ralpha');
+      if (!scriptPath) throw new Error('unified server path missing from config');
       const responses = await mcpHandshake(scriptPath);
-      if (responses.length < 2) throw new Error('state server handshake incomplete');
-      return responses[1].result.tools.map((tool) => tool.name);
-    }),
-    check('mcp_trace_handshake', async () => {
-      const scriptPath = findServerPath(configContent, 'oh_my_ralpha_trace');
-      if (!scriptPath) throw new Error('trace server path missing from config');
-      const responses = await mcpHandshake(scriptPath);
-      if (responses.length < 2) throw new Error('trace server handshake incomplete');
-      return responses[1].result.tools.map((tool) => tool.name);
-    }),
-    check('mcp_runtime_handshake', async () => {
-      const scriptPath = findServerPath(configContent, 'oh_my_ralpha_runtime');
-      if (!scriptPath) throw new Error('runtime server path missing from config');
-      const responses = await mcpHandshake(scriptPath);
-      if (responses.length < 2) throw new Error('runtime server handshake incomplete');
+      if (responses.length < 2) throw new Error('unified server handshake incomplete');
       return responses[1].result.tools.map((tool) => tool.name);
     }),
   ]);

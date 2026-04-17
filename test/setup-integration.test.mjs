@@ -1,12 +1,14 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { doctorReport } from '../src/doctor.mjs';
 import { runtimeRootFromModule } from '../src/paths.mjs';
 import { setupCodexIntegration, uninstallCodexIntegration } from '../src/setup.mjs';
 import { dispatchNativeHook } from '../src/native-hook.mjs';
+import { writeModeState } from '../src/state.mjs';
 
 function makeTempWorkspace(prefix) {
   return mkdtemp(join(tmpdir(), prefix));
@@ -30,14 +32,14 @@ describe('oh-my-ralpha setup integration', () => {
 
     assert.equal(existsSync(result.targetSkillDir), true);
     assert.match(config, /codex_hooks = true/);
-    assert.match(config, /^notify = \["node", ".*oh-my-ralpha\.js", "notify"\]$/m);
-    assert.match(config, /\[mcp_servers\.oh_my_ralpha_state\]/);
-    assert.match(config, /\[mcp_servers\.oh_my_ralpha_trace\]/);
-    assert.match(config, /\[mcp_servers\.oh_my_ralpha_runtime\]/);
+    assert.doesNotMatch(config, /^notify = \["node", ".*oh-my-ralpha\.js", "notify"\]$/m);
+    assert.match(config, /\[mcp_servers\.oh_my_ralpha\]/);
+    assert.doesNotMatch(config, /\[mcp_servers\.oh_my_ralpha_state\]/);
+    assert.doesNotMatch(config, /\[mcp_servers\.oh_my_ralpha_trace\]/);
+    assert.doesNotMatch(config, /\[mcp_servers\.oh_my_ralpha_runtime\]/);
     assert.ok(hooks.hooks.SessionStart);
-    assert.ok(hooks.hooks.PreToolUse);
-    assert.equal(hooks.hooks.PreToolUse[0].matcher, undefined);
-    assert.ok(hooks.hooks.PostToolUse);
+    assert.equal(hooks.hooks.PreToolUse, undefined);
+    assert.equal(hooks.hooks.PostToolUse, undefined);
     assert.ok(hooks.hooks.UserPromptSubmit);
     assert.ok(hooks.hooks.Stop);
   });
@@ -70,6 +72,7 @@ describe('oh-my-ralpha setup integration', () => {
     assert.ok(!sessionHooks.some((hook) => typeof hook.command === 'string' && hook.command.includes('oh-my-ralpha.js" hook native')));
     assert.match(nextConfig, /codex_hooks = true/);
     assert.doesNotMatch(nextConfig, /^notify = \["node", ".*oh-my-ralpha\.js", "notify"\]$/m);
+    assert.doesNotMatch(nextConfig, /\[mcp_servers\.oh_my_ralpha\]/);
     assert.doesNotMatch(nextConfig, /\[mcp_servers\.oh_my_ralpha_state\]/);
     assert.doesNotMatch(nextConfig, /\[mcp_servers\.oh_my_ralpha_trace\]/);
     assert.doesNotMatch(nextConfig, /\[mcp_servers\.oh_my_ralpha_runtime\]/);
@@ -103,8 +106,8 @@ describe('oh-my-ralpha setup integration', () => {
     assert.equal(existsSync(join(codexHome, 'config.toml')), false);
   });
 
-  it('preserves and chains a pre-existing non-managed notify entry', async () => {
-    const cwd = await makeTempWorkspace('oh-my-ralpha-invalid-notify-');
+  it('preserves a pre-existing non-managed notify entry without wrapping it', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-existing-notify-');
     const codexHome = await makeTempWorkspace('oh-my-ralpha-codex-home-');
     const runtimeRoot = runtimeRootFromModule(import.meta.url);
     await import('node:fs/promises').then(({ mkdir, writeFile }) =>
@@ -122,10 +125,136 @@ describe('oh-my-ralpha setup integration', () => {
     });
 
     const config = await readFile(join(codexHome, 'config.toml'), 'utf-8');
-    const chain = JSON.parse(await readFile(join(result.targetSkillDir, 'notify-chain.json'), 'utf-8'));
 
-    assert.match(config, /^notify = \["node", ".*oh-my-ralpha\.js", "notify"\]$/m);
-    assert.deepEqual(chain.command, ['node', '/tmp/custom-notify.js']);
+    assert.equal(existsSync(result.targetSkillDir), true);
+    assert.match(config, /^notify = \["node", "\/tmp\/custom-notify\.js"\]$/m);
+    assert.equal(existsSync(join(result.targetSkillDir, 'notify-chain.json')), false);
+  });
+
+  it('replaces stale split MCP registrations with the unified MCP server', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-stale-mcp-');
+    const codexHome = await makeTempWorkspace('oh-my-ralpha-codex-home-');
+    const runtimeRoot = runtimeRootFromModule(import.meta.url);
+    await import('node:fs/promises').then(({ mkdir, writeFile }) =>
+      mkdir(codexHome, { recursive: true }).then(() =>
+        writeFile(join(codexHome, 'config.toml'), [
+          '[mcp_servers.oh_my_ralpha_state]',
+          'command = "node"',
+          'args = ["/tmp/state-server.mjs"]',
+          '',
+          '[mcp_servers.oh_my_ralpha_trace]',
+          'command = "node"',
+          'args = ["/tmp/trace-server.mjs"]',
+          '',
+          '[mcp_servers.oh_my_ralpha_runtime]',
+          'command = "node"',
+          'args = ["/tmp/runtime-server.mjs"]',
+          '',
+        ].join('\n'), 'utf-8'),
+      ),
+    );
+
+    await setupCodexIntegration({
+      cwd,
+      runtimeRoot,
+      codexHome,
+      scope: 'user',
+      force: true,
+    });
+
+    const config = await readFile(join(codexHome, 'config.toml'), 'utf-8');
+    assert.match(config, /\[mcp_servers\.oh_my_ralpha\]/);
+    assert.doesNotMatch(config, /\[mcp_servers\.oh_my_ralpha_state\]/);
+    assert.doesNotMatch(config, /\[mcp_servers\.oh_my_ralpha_trace\]/);
+    assert.doesNotMatch(config, /\[mcp_servers\.oh_my_ralpha_runtime\]/);
+  });
+
+  it('installs bundled companion prompts, native agents, and skills', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-companion-install-');
+    const codexHome = await makeTempWorkspace('oh-my-ralpha-codex-home-');
+    const runtimeRoot = runtimeRootFromModule(import.meta.url);
+    await mkdir(join(codexHome, 'prompts'), { recursive: true });
+    await mkdir(join(codexHome, 'agents'), { recursive: true });
+    await writeFile(join(codexHome, 'prompts', 'team-executor.md'), '# stale team executor\n', 'utf-8');
+    await writeFile(join(codexHome, 'agents', 'team-executor.toml'), 'name = "team-executor"\n', 'utf-8');
+
+    const result = await setupCodexIntegration({
+      cwd,
+      runtimeRoot,
+      codexHome,
+      scope: 'user',
+      force: true,
+    });
+
+    assert.equal(result.companions.prompts.every((entry) => entry.installed), true);
+    assert.equal(result.companions.skills.every((entry) => entry.installed), true);
+    assert.equal(existsSync(join(codexHome, 'prompts', 'architect.md')), true);
+    assert.equal(existsSync(join(codexHome, 'agents', 'architect.toml')), true);
+    assert.equal(existsSync(join(codexHome, 'prompts', 'code-reviewer.md')), true);
+    assert.equal(existsSync(join(codexHome, 'agents', 'code-reviewer.toml')), true);
+    assert.equal(existsSync(join(codexHome, 'prompts', 'code-simplifier.md')), true);
+    assert.equal(existsSync(join(codexHome, 'agents', 'code-simplifier.toml')), true);
+    assert.equal(existsSync(join(codexHome, 'skills', 'ai-slop-cleaner', 'SKILL.md')), true);
+    assert.equal(existsSync(join(codexHome, 'prompts', 'analyst.md')), false);
+    assert.equal(existsSync(join(codexHome, 'agents', 'analyst.toml')), false);
+    assert.equal(existsSync(join(codexHome, 'prompts', 'team-executor.md')), false);
+    assert.equal(existsSync(join(codexHome, 'agents', 'team-executor.toml')), false);
+    assert.equal(existsSync(join(codexHome, 'skills', 'deep-interview', 'SKILL.md')), false);
+    assert.equal(existsSync(join(codexHome, 'skills', 'visual-verdict', 'SKILL.md')), false);
+    assert.equal(existsSync(join(codexHome, 'skills', 'web-clone', 'SKILL.md')), false);
+
+    const architectAgent = await readFile(join(codexHome, 'agents', 'architect.toml'), 'utf-8');
+    assert.match(architectAgent, /name = "architect"/);
+    assert.match(architectAgent, /model_reasoning_effort = "high"/);
+    assert.match(architectAgent, /You are Architect/);
+    assert.doesNotMatch(architectAgent, /developer_instructions = """\n---/);
+
+    const report = doctorReport({ runtimeRoot, codexHome });
+    const architect = report.companions.find((entry) => entry.id === 'architect');
+    const slopCleaner = report.companions.find((entry) => entry.id === 'ai-slop-cleaner');
+    assert.equal(architect.installed, true);
+    assert.equal(architect.source, 'bundled-agent-prompt');
+    assert.equal(slopCleaner.installed, true);
+    assert.equal(slopCleaner.source, 'bundled-skill');
+  });
+
+  it('does not install a project-scope companion skill when user scope already provides it', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-project-companion-skip-');
+    const userCodexHome = await makeTempWorkspace('oh-my-ralpha-user-codex-home-');
+    const runtimeRoot = runtimeRootFromModule(import.meta.url);
+    const userSkillDir = join(userCodexHome, 'skills', 'ai-slop-cleaner');
+    await mkdir(userSkillDir, { recursive: true });
+    await writeFile(join(userSkillDir, 'SKILL.md'), '---\nname: ai-slop-cleaner\ndescription: user copy\n---\n', 'utf-8');
+
+    const previousCodexHome = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = userCodexHome;
+    try {
+      const result = await setupCodexIntegration({
+        cwd,
+        runtimeRoot,
+        scope: 'project',
+        force: true,
+      });
+
+      assert.equal(result.codexHome, join(cwd, '.codex'));
+      const skillResult = result.companions.skills.find((entry) => entry.id === 'ai-slop-cleaner');
+      assert.equal(skillResult.installed, true);
+      assert.equal(skillResult.source, 'user-skill');
+      assert.equal(skillResult.skippedProjectInstall, true);
+      assert.equal(existsSync(join(cwd, '.codex', 'skills', 'ai-slop-cleaner', 'SKILL.md')), false);
+
+      const report = doctorReport({ runtimeRoot, cwd, scope: 'project' });
+      const slopCleaner = report.companions.find((entry) => entry.id === 'ai-slop-cleaner');
+      assert.equal(slopCleaner.installed, true);
+      assert.equal(slopCleaner.source, 'user-skill');
+      assert.match(slopCleaner.skillPath, /ai-slop-cleaner\/SKILL\.md$/);
+    } finally {
+      if (previousCodexHome === undefined) {
+        delete process.env.CODEX_HOME;
+      } else {
+        process.env.CODEX_HOME = previousCodexHome;
+      }
+    }
   });
 
   it('returns native hook additional context for routed prompts', async () => {
@@ -137,7 +266,131 @@ describe('oh-my-ralpha setup integration', () => {
     });
 
     assert.equal(output.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
-    assert.match(output.hookSpecificOutput.additionalContext, /Do planning first/i);
+    assert.match(output.hookSpecificOutput.additionalContext, /activated planning phase/i);
+    assert.match(output.hookSpecificOutput.additionalContext, /Planning artifact status/i);
+    assert.equal(existsSync(join(cwd, '.codex', 'oh-my-ralpha', 'working-model', 'state')), true);
+    assert.equal(output.continue, undefined);
+  });
+
+  it('blocks Stop for session-scoped active state without claiming verification', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-hook-');
+    await writeModeState({
+      cwd,
+      mode: 'oh-my-ralpha',
+      sessionId: 'sess-stop',
+      patch: {
+        active: true,
+        current_phase: 'complete',
+      },
+    });
+
+    const blocked = await dispatchNativeHook({
+      hook_event_name: 'Stop',
+      cwd,
+      session_id: 'sess-stop',
+    });
+
+    assert.equal(blocked.decision, 'block');
+    assert.match(blocked.reason, /session sess-stop/);
+    assert.match(blocked.reason, /not a substitute/i);
+    assert.match(blocked.reason, /fresh evidence/i);
+    assert.match(blocked.reason, /architect\/code-reviewer\/code-simplifier slice acceptance/i);
+    assert.match(blocked.reason, /final deslop/i);
+    assert.match(blocked.reason, /post-deslop regression/i);
+
+    await writeModeState({
+      cwd,
+      mode: 'oh-my-ralpha',
+      sessionId: 'sess-stop',
+      patch: {
+        active: false,
+        current_phase: 'complete',
+      },
+    });
+
+    const allowed = await dispatchNativeHook({
+      hook_event_name: 'Stop',
+      cwd,
+      session_id: 'sess-stop',
+    });
+    assert.equal(allowed, null);
+  });
+
+  it('allows Stop for explicit paused state with resume target', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-paused-');
+    await writeModeState({
+      cwd,
+      mode: 'oh-my-ralpha',
+      sessionId: 'sess-paused',
+      patch: {
+        active: true,
+        current_phase: 'paused',
+        pause_reason: 'user_requested_pause',
+        state: {
+          next_todo: 'P0-04',
+          current_slice: 'P0-04',
+        },
+      },
+    });
+
+    const output = await dispatchNativeHook({
+      hook_event_name: 'Stop',
+      cwd,
+      session_id: 'sess-paused',
+    });
+
+    assert.equal(output.decision, undefined);
+    assert.equal(output.hookSpecificOutput.hookEventName, 'Stop');
+    assert.match(output.hookSpecificOutput.additionalContext, /paused and resumable/i);
+    assert.match(output.hookSpecificOutput.additionalContext, /resume_target: P0-04/);
+    assert.match(output.hookSpecificOutput.additionalContext, /pause_reason: user_requested_pause/);
+  });
+
+  it('blocks paused state without resume target', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-paused-missing-resume-');
+    await writeModeState({
+      cwd,
+      mode: 'oh-my-ralpha',
+      patch: {
+        active: true,
+        current_phase: 'paused',
+        pause_reason: 'user_requested_pause',
+      },
+    });
+
+    const blocked = await dispatchNativeHook({
+      hook_event_name: 'Stop',
+      cwd,
+    });
+
+    assert.equal(blocked.decision, 'block');
+    assert.match(blocked.reason, /missing resume state/i);
+    assert.match(blocked.reason, /state\.next_todo/i);
+  });
+
+  it('blocks inactive non-terminal pseudo-pauses', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-pseudo-pause-');
+    await writeModeState({
+      cwd,
+      mode: 'oh-my-ralpha',
+      patch: {
+        active: false,
+        current_phase: 'paused_after_P0-03',
+        state: {
+          next_todo: 'P0-04',
+        },
+      },
+    });
+
+    const blocked = await dispatchNativeHook({
+      hook_event_name: 'Stop',
+      cwd,
+    });
+
+    assert.equal(blocked.decision, 'block');
+    assert.match(blocked.reason, /inactive non-terminal state/i);
+    assert.match(blocked.reason, /active:true/);
+    assert.match(blocked.reason, /complete\/failed\/cancelled/);
   });
 
   it('doctor reports project-scope MCP visibility against the project .codex root', async () => {
@@ -159,9 +412,7 @@ describe('oh-my-ralpha setup integration', () => {
 
     assert.match(report.codexHome, /\.codex$/);
     assert.equal(report.scope, 'project');
-    assert.equal(report.checks.notifyConfigured, true);
-    assert.equal(report.checks.mcpStateConfigured, true);
-    assert.equal(report.checks.mcpTraceConfigured, true);
-    assert.equal(report.checks.mcpRuntimeConfigured, true);
+    assert.equal(report.checks.mcpConfigured, true);
+    assert.equal(report.checks.legacyMcpConfigured, false);
   });
 });

@@ -5,7 +5,7 @@ This repository packages `oh-my-ralpha` as a standalone artifact bundle.
 ## Working rules
 
 - Keep `skills/oh-my-ralpha/SKILL.md` and `skills/oh-my-ralpha/FLOW.md` aligned.
-- Keep the example `.omx` truth-source files aligned with the skill contract.
+- Keep the example `.codex/oh-my-ralpha` truth-source files aligned with the skill contract.
 - If public trigger phrases change, update:
   - `src/keywords.mjs`
   - `skills/oh-my-ralpha/SKILL.md`

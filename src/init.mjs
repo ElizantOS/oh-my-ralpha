@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { omxContextDir, omxStateDir } from './paths.mjs';
+import { workingModelContextDir, workingModelStateDir } from './paths.mjs';
 import { slugify } from './planning.mjs';
 
 function utcTimestamp(now = new Date()) {
@@ -53,8 +53,8 @@ export async function initWorkspace({
   overwrite = false,
   now = new Date(),
 }) {
-  const contextDir = omxContextDir(cwd);
-  const stateDir = omxStateDir(cwd);
+  const contextDir = workingModelContextDir(cwd);
+  const stateDir = workingModelStateDir(cwd);
   await mkdir(contextDir, { recursive: true });
   await mkdir(stateDir, { recursive: true });
 

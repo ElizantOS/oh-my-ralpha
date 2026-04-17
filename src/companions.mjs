@@ -1,32 +1,40 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { installedSkillDir } from './paths.mjs';
+import { installedAgentsDir, installedPromptsDir, installedSkillDir, resolveCodexHome } from './paths.mjs';
 
-export const COMPANION_CAPABILITIES = Object.freeze([
+export const COMPANION_AGENT_PROMPTS = Object.freeze([
   {
-    id: 'plan',
-    type: 'skill',
-    installName: 'plan',
-    fallback: 'built-in plan scaffold',
+    id: 'architect',
+    type: 'agent-prompt',
+    installName: 'architect',
+    fallback: 'manual architecture verification note in rounds/trace',
+    description: 'System design, boundaries, interfaces, long-horizon tradeoffs',
+    reasoningEffort: 'high',
   },
   {
-    id: 'deep-interview',
-    type: 'skill',
-    installName: 'deep-interview',
-    fallback: 'built-in interview scaffold',
+    id: 'code-reviewer',
+    type: 'agent-prompt',
+    installName: 'code-reviewer',
+    fallback: 'manual final code review note in rounds/trace',
+    description: 'Comprehensive review across all concerns',
+    reasoningEffort: 'high',
   },
   {
-    id: 'visual-verdict',
-    type: 'skill',
-    installName: 'visual-verdict',
-    fallback: 'manual visual review note in rounds/trace',
+    id: 'code-simplifier',
+    type: 'agent-prompt',
+    installName: 'code-simplifier',
+    fallback: 'manual simplification checklist in rounds/trace',
+    description: 'Simplifies recently modified code for clarity and consistency without changing behavior',
+    reasoningEffort: 'high',
   },
-  {
-    id: 'web-clone',
-    type: 'skill',
-    installName: 'web-clone',
-    fallback: 'manual cloning workflow note in rounds/trace',
-  },
+]);
+
+export const OBSOLETE_COMPANION_AGENT_PROMPTS = Object.freeze([
+  'analyst',
+  'team-executor',
+]);
+
+export const COMPANION_SKILLS = Object.freeze([
   {
     id: 'ai-slop-cleaner',
     type: 'skill',
@@ -35,14 +43,49 @@ export const COMPANION_CAPABILITIES = Object.freeze([
   },
 ]);
 
+export const OBSOLETE_COMPANION_SKILLS = Object.freeze([
+  'deep-interview',
+  'visual-verdict',
+  'web-clone',
+]);
+
+export const COMPANION_CAPABILITIES = Object.freeze([
+  ...COMPANION_AGENT_PROMPTS,
+  ...COMPANION_SKILLS,
+]);
+
 export function resolveCompanionStatuses(codexHome) {
   return COMPANION_CAPABILITIES.map((capability) => {
-    const skillPath = join(installedSkillDir(codexHome, capability.installName), 'SKILL.md');
-    const installed = existsSync(skillPath);
+    const skillPath = capability.type === 'skill'
+      ? join(installedSkillDir(codexHome, capability.installName), 'SKILL.md')
+      : null;
+    const userSkillPath = capability.type === 'skill'
+      ? join(installedSkillDir(resolveCodexHome(), capability.installName), 'SKILL.md')
+      : null;
+    const promptPath = capability.type === 'agent-prompt'
+      ? join(installedPromptsDir(codexHome), `${capability.installName}.md`)
+      : null;
+    const agentPath = capability.type === 'agent-prompt'
+      ? join(installedAgentsDir(codexHome), `${capability.installName}.toml`)
+      : null;
+    const targetSkillInstalled = capability.type === 'skill' && existsSync(skillPath);
+    const userSkillInstalled = capability.type === 'skill' && existsSync(userSkillPath);
+    const installed = capability.type === 'skill'
+      ? targetSkillInstalled || userSkillInstalled
+      : existsSync(promptPath) && existsSync(agentPath);
     return {
       ...capability,
       installed,
-      source: installed ? 'external-skill' : 'fallback',
+      skillPath: targetSkillInstalled ? skillPath : userSkillPath,
+      targetSkillPath: skillPath,
+      userSkillPath,
+      promptPath,
+      agentPath,
+      source: installed
+        ? (capability.type === 'skill'
+          ? (targetSkillInstalled ? 'bundled-skill' : 'user-skill')
+          : 'bundled-agent-prompt')
+        : 'fallback',
     };
   });
 }

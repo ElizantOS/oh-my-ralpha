@@ -1,13 +1,20 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import {
+  COMPANION_AGENT_PROMPTS,
+  COMPANION_SKILLS,
+  OBSOLETE_COMPANION_AGENT_PROMPTS,
+  OBSOLETE_COMPANION_SKILLS,
+} from './companions.mjs';
 import { installSkill } from './install.mjs';
-import { resolveCodexHome } from './paths.mjs';
+import { installedAgentsDir, installedPromptsDir, installedSkillDir, resolveCodexHome } from './paths.mjs';
 
 const MANAGED_HOOK_MARKER = 'oh-my-ralpha.js" hook native';
 const MANAGED_MCP_START = '# BEGIN OH_MY_RALPHA MCP BLOCK';
 const MANAGED_MCP_END = '# END OH_MY_RALPHA MCP BLOCK';
 const NOTIFY_CHAIN_FILE = 'notify-chain.json';
+const BUNDLED_COMPANION_SKILL_FILE = 'SKILL.bundle.md';
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -24,6 +31,127 @@ export function getNotifyChainPath(installedSkillDir) {
   return join(installedSkillDir, NOTIFY_CHAIN_FILE);
 }
 
+function escapeTomlBasicString(value) {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function escapeTomlMultiline(value) {
+  return value.replace(/"{3,}/g, (match) => match.split('').join('\\'));
+}
+
+function stripFrontmatter(content) {
+  const match = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+  return match ? content.slice(match[0].length).trim() : content.trim();
+}
+
+function nativeAgentToml(capability, promptContent) {
+  const instructions = stripFrontmatter(promptContent);
+  const lines = [
+    `# oh-my-ralpha imported OMX agent: ${capability.installName}`,
+    `name = "${escapeTomlBasicString(capability.installName)}"`,
+    `description = "${escapeTomlBasicString(capability.description)}"`,
+    `model_reasoning_effort = "${capability.reasoningEffort}"`,
+    'developer_instructions = """',
+    escapeTomlMultiline(instructions),
+    '"""',
+    '',
+  ];
+  return lines.join('\n');
+}
+
+async function installBundledCompanions({ codexHome, runtimeRoot, scope = 'user', force = false }) {
+  const summary = {
+    sourceRoot: runtimeRoot,
+    prompts: [],
+    skills: [],
+    removed: [],
+  };
+
+  const sourcePromptsDir = join(runtimeRoot, 'companions', 'prompts');
+  const sourceSkillsDir = join(runtimeRoot, 'companions', 'skills');
+  const userCodexHome = resolveCodexHome();
+  const targetIsUserCodexHome = scope === 'user' || resolve(codexHome) === resolve(userCodexHome);
+
+  await mkdir(installedPromptsDir(codexHome), { recursive: true });
+  await mkdir(installedAgentsDir(codexHome), { recursive: true });
+
+  if (force) {
+    for (const name of OBSOLETE_COMPANION_AGENT_PROMPTS) {
+      const promptPath = join(installedPromptsDir(codexHome), `${name}.md`);
+      const agentPath = join(installedAgentsDir(codexHome), `${name}.toml`);
+      const existed = existsSync(promptPath) || existsSync(agentPath);
+      await rm(promptPath, { force: true });
+      await rm(agentPath, { force: true });
+      if (existed) summary.removed.push({ type: 'agent-prompt', id: name, promptPath, agentPath });
+    }
+
+    for (const name of OBSOLETE_COMPANION_SKILLS) {
+      const skillDir = installedSkillDir(codexHome, name);
+      const existed = existsSync(skillDir);
+      await rm(skillDir, { recursive: true, force: true });
+      if (existed) summary.removed.push({ type: 'skill', id: name, skillDir });
+    }
+  }
+
+  for (const capability of COMPANION_AGENT_PROMPTS) {
+    const sourcePromptPath = join(sourcePromptsDir, `${capability.installName}.md`);
+    const promptPath = join(installedPromptsDir(codexHome), `${capability.installName}.md`);
+    const agentPath = join(installedAgentsDir(codexHome), `${capability.installName}.toml`);
+    if (!existsSync(sourcePromptPath)) {
+      summary.prompts.push({ id: capability.id, installed: false, reason: 'missing-source-prompt' });
+      continue;
+    }
+    if (force || !existsSync(promptPath)) {
+      await copyFile(sourcePromptPath, promptPath);
+    }
+    if (force || !existsSync(agentPath)) {
+      const promptContent = await readFile(sourcePromptPath, 'utf-8');
+      await writeFile(agentPath, nativeAgentToml(capability, promptContent), 'utf-8');
+    }
+    summary.prompts.push({ id: capability.id, installed: true, promptPath, agentPath });
+  }
+
+  for (const capability of COMPANION_SKILLS) {
+    const sourceSkillDir = join(sourceSkillsDir, capability.installName);
+    const sourceSkillPath = join(sourceSkillDir, BUNDLED_COMPANION_SKILL_FILE);
+    const targetSkillDir = installedSkillDir(codexHome, capability.installName);
+    const targetSkillPath = join(targetSkillDir, 'SKILL.md');
+    const userSkillDir = installedSkillDir(userCodexHome, capability.installName);
+    const userSkillPath = join(userSkillDir, 'SKILL.md');
+    if (!existsSync(sourceSkillPath)) {
+      summary.skills.push({ id: capability.id, installed: false, reason: 'missing-source-skill' });
+      continue;
+    }
+
+    if (!targetIsUserCodexHome && existsSync(userSkillPath)) {
+      const existed = existsSync(targetSkillDir);
+      if (force) {
+        await rm(targetSkillDir, { recursive: true, force: true });
+      }
+      if (existed && force) {
+        summary.removed.push({ type: 'skill', id: capability.id, skillDir: targetSkillDir });
+      }
+      summary.skills.push({
+        id: capability.id,
+        installed: true,
+        skillPath: userSkillPath,
+        source: 'user-skill',
+        skippedProjectInstall: true,
+      });
+      continue;
+    }
+
+    if (force || !existsSync(targetSkillDir)) {
+      await rm(targetSkillDir, { recursive: true, force: true });
+      await mkdir(targetSkillDir, { recursive: true });
+      await copyFile(sourceSkillPath, targetSkillPath);
+    }
+    summary.skills.push({ id: capability.id, installed: true, skillPath: targetSkillPath });
+  }
+
+  return summary;
+}
+
 function codexConfigPath(codexHome) {
   return join(codexHome, 'config.toml');
 }
@@ -32,36 +160,11 @@ function codexHooksPath(codexHome) {
   return join(codexHome, 'hooks.json');
 }
 
-function buildManagedNotifyLine(installedCliPath) {
-  return `notify = ["node", "${installedCliPath}", "notify"]`;
-}
-
 function isManagedNotifyLine(line) {
   return /^\s*notify\s*=\s*\["node",\s*".*oh-my-ralpha\.js",\s*"notify"\]\s*$/.test(line);
 }
 
-function parseNotifyArrayLiteral(line) {
-  const match = line.match(/^\s*notify\s*=\s*(\[[\s\S]*\])\s*$/);
-  if (!match) return null;
-  try {
-    const parsed = JSON.parse(match[1]);
-    return Array.isArray(parsed) && parsed.every((entry) => typeof entry === 'string') ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function writeNotifyChain(installedSkillDir, notifyCommand) {
-  const path = getNotifyChainPath(installedSkillDir);
-  if (!notifyCommand) {
-    await rm(path, { force: true });
-    return null;
-  }
-  await writeFile(path, JSON.stringify({ command: notifyCommand }, null, 2) + '\n', 'utf-8');
-  return path;
-}
-
-export async function readNotifyChain(installedSkillDir) {
+async function readNotifyChain(installedSkillDir) {
   const path = getNotifyChainPath(installedSkillDir);
   if (!existsSync(path)) return null;
   try {
@@ -73,27 +176,13 @@ export async function readNotifyChain(installedSkillDir) {
 }
 
 function managedMcpBlock(installedSkillDir) {
-  const stateServerPath = join(installedSkillDir, 'src', 'mcp', 'state-server.mjs');
-  const traceServerPath = join(installedSkillDir, 'src', 'mcp', 'trace-server.mjs');
-  const runtimeServerPath = join(installedSkillDir, 'src', 'mcp', 'runtime-server.mjs');
+  const serverPath = join(installedSkillDir, 'src', 'mcp', 'server.mjs');
 
   return [
     MANAGED_MCP_START,
-    '[mcp_servers.oh_my_ralpha_state]',
+    '[mcp_servers.oh_my_ralpha]',
     'command = "node"',
-    `args = ["${stateServerPath}"]`,
-    'enabled = true',
-    'startup_timeout_sec = 5',
-    '',
-    '[mcp_servers.oh_my_ralpha_trace]',
-    'command = "node"',
-    `args = ["${traceServerPath}"]`,
-    'enabled = true',
-    'startup_timeout_sec = 5',
-    '',
-    '[mcp_servers.oh_my_ralpha_runtime]',
-    'command = "node"',
-    `args = ["${runtimeServerPath}"]`,
+    `args = ["${serverPath}"]`,
     'enabled = true',
     'startup_timeout_sec = 5',
     MANAGED_MCP_END,
@@ -135,39 +224,6 @@ function ensureCodexHooksFlag(content) {
   return lines.join('\n').replace(/\n*$/, '\n');
 }
 
-function upsertManagedNotify(content, installedCliPath) {
-  const lines = content ? content.split(/\r?\n/) : [];
-  const firstTableIndex = lines.findIndex((line) => /^\s*\[.+\]\s*$/.test(line));
-  const boundary = firstTableIndex >= 0 ? firstTableIndex : lines.length;
-  const notifyIndex = lines.findIndex((line, index) => index < boundary && /^\s*notify\s*=/.test(line));
-  const nextLine = buildManagedNotifyLine(installedCliPath);
-
-  if (notifyIndex >= 0) {
-    if (!isManagedNotifyLine(lines[notifyIndex])) {
-      const chainedNotify = parseNotifyArrayLiteral(lines[notifyIndex]);
-      if (!chainedNotify) {
-        throw new Error('config.toml already contains a non-managed notify entry; unable to parse it for chaining');
-      }
-      lines[notifyIndex] = nextLine;
-      return {
-        content: lines.join('\n').replace(/\n*$/, '\n'),
-        chainedNotify,
-      };
-    }
-    lines[notifyIndex] = nextLine;
-    return {
-      content: lines.join('\n').replace(/\n*$/, '\n'),
-      chainedNotify: null,
-    };
-  }
-
-  lines.splice(boundary, 0, nextLine);
-  return {
-    content: lines.join('\n').replace(/\n*$/, '\n'),
-    chainedNotify: null,
-  };
-}
-
 function removeCodexHooksFlag(content) {
   const lines = content.split(/\r?\n/);
   const nextLines = lines.filter((line) => !/^\s*codex_hooks\s*=/.test(line));
@@ -182,17 +238,13 @@ function removeManagedNotifyLine(content) {
     .trimEnd();
 }
 
-async function writeManagedConfig(codexHome, installedCliPath) {
+async function writeManagedConfig(codexHome) {
   const path = codexConfigPath(codexHome);
   const existing = existsSync(path) ? await readFile(path, 'utf-8') : '';
-  const notifyResult = upsertManagedNotify(existing, installedCliPath);
-  const next = ensureCodexHooksFlag(notifyResult.content);
+  const next = ensureCodexHooksFlag(existing);
   await mkdir(codexHome, { recursive: true });
   await writeFile(path, next, 'utf-8');
-  return {
-    path,
-    chainedNotify: notifyResult.chainedNotify,
-  };
+  return path;
 }
 
 function stripManagedMcpBlock(content) {
@@ -200,10 +252,35 @@ function stripManagedMcpBlock(content) {
   return content.replace(pattern, '').trimEnd();
 }
 
+function stripMcpServerTables(content, names) {
+  const nameSet = new Set(names);
+  const lines = content.split(/\r?\n/);
+  const kept = [];
+  let skipping = false;
+
+  for (const line of lines) {
+    const tableMatch = line.match(/^\s*\[mcp_servers\.([A-Za-z0-9_-]+)\]\s*$/);
+    if (tableMatch) {
+      skipping = nameSet.has(tableMatch[1]);
+    } else if (/^\s*\[.+\]\s*$/.test(line)) {
+      skipping = false;
+    }
+
+    if (!skipping) kept.push(line);
+  }
+
+  return kept.join('\n').trimEnd();
+}
+
 async function writeManagedMcpConfig(codexHome, installedSkillDir) {
   const path = codexConfigPath(codexHome);
   const existing = existsSync(path) ? await readFile(path, 'utf-8') : '';
-  const stripped = stripManagedMcpBlock(existing);
+  const stripped = stripMcpServerTables(stripManagedMcpBlock(existing), [
+    'oh_my_ralpha',
+    'oh_my_ralpha_state',
+    'oh_my_ralpha_trace',
+    'oh_my_ralpha_runtime',
+  ]);
   const next = [stripped, managedMcpBlock(installedSkillDir)].filter(Boolean).join('\n\n') + '\n';
   await mkdir(codexHome, { recursive: true });
   await writeFile(path, next, 'utf-8');
@@ -216,12 +293,6 @@ function buildManagedHooks(installedCliPath) {
     SessionStart: [{
       matcher: 'startup|resume',
       hooks: [{ type: 'command', command, statusMessage: 'Loading oh-my-ralpha session context' }],
-    }],
-    PreToolUse: [{
-      hooks: [{ type: 'command', command, statusMessage: 'Logging oh-my-ralpha tool preflight' }],
-    }],
-    PostToolUse: [{
-      hooks: [{ type: 'command', command, statusMessage: 'Logging oh-my-ralpha tool result' }],
     }],
     UserPromptSubmit: [{
       hooks: [{ type: 'command', command, statusMessage: 'Applying oh-my-ralpha prompt routing' }],
@@ -290,7 +361,12 @@ async function removeManagedConfig(codexHome, installedSkillDir, { keepCodexHook
   const existing = await readFile(path, 'utf-8');
   const notifyChain = await readNotifyChain(installedSkillDir);
   const withoutNotify = removeManagedNotifyLine(existing);
-  const withoutMcp = stripManagedMcpBlock(withoutNotify);
+  const withoutMcp = stripMcpServerTables(stripManagedMcpBlock(withoutNotify), [
+    'oh_my_ralpha',
+    'oh_my_ralpha_state',
+    'oh_my_ralpha_trace',
+    'oh_my_ralpha_runtime',
+  ]);
   const maybeRestoredNotify = restoreNotifyLine(withoutMcp, notifyChain);
   const stripped = (keepCodexHooks ? maybeRestoredNotify : removeCodexHooksFlag(maybeRestoredNotify)).trim();
   if (!stripped) {
@@ -349,16 +425,22 @@ export async function setupCodexIntegration({
     codexHome: targetCodexHome,
     force,
   });
-  const configResult = await writeManagedConfig(targetCodexHome, installed.installedCliPath);
-  await writeNotifyChain(installed.targetSkillDir, configResult.chainedNotify);
+  await writeManagedConfig(targetCodexHome);
   const configPath = await writeManagedMcpConfig(targetCodexHome, installed.targetSkillDir);
   const hooksPath = await writeManagedHooks(targetCodexHome, installed.installedCliPath);
+  const companions = await installBundledCompanions({
+    codexHome: targetCodexHome,
+    runtimeRoot,
+    scope,
+    force,
+  });
   return {
     scope,
     codexHome: targetCodexHome,
     ...installed,
     configPath,
     hooksPath,
+    companions,
   };
 }
 

@@ -25,10 +25,8 @@ export function doctorReport({ runtimeRoot, codexHome, cwd = process.cwd(), scop
     installedSkill: existsSync(installedSkillPath),
     launcher: existsSync(launcherPath),
     codexBinOnPath: (process.env.PATH || '').split(':').includes(codexBinPath),
-    notifyConfigured: /^notify\s*=\s*\["node",\s*".*oh-my-ralpha\.js",\s*"notify"\]\s*$/m.test(configContent),
-    mcpStateConfigured: /\[mcp_servers\.oh_my_ralpha_state\]/.test(configContent),
-    mcpTraceConfigured: /\[mcp_servers\.oh_my_ralpha_trace\]/.test(configContent),
-    mcpRuntimeConfigured: /\[mcp_servers\.oh_my_ralpha_runtime\]/.test(configContent),
+    mcpConfigured: /\[mcp_servers\.oh_my_ralpha\]/.test(configContent),
+    legacyMcpConfigured: /\[mcp_servers\.oh_my_ralpha_(?:state|trace|runtime)\]/.test(configContent),
   };
   const suggestions = [];
 
@@ -38,11 +36,8 @@ export function doctorReport({ runtimeRoot, codexHome, cwd = process.cwd(), scop
   if (!checks.codexBinOnPath) {
     suggestions.push(`Add ${codexBinPath} to PATH, or keep using "node ${join(runtimeRoot, 'bin', 'oh-my-ralpha.js')}" directly.`);
   }
-  if (!checks.mcpStateConfigured || !checks.mcpTraceConfigured || !checks.mcpRuntimeConfigured) {
+  if (!checks.mcpConfigured || checks.legacyMcpConfigured) {
     suggestions.push(`Re-run "oh-my-ralpha setup --scope ${scope} --force" to restore MCP server configuration.`);
-  }
-  if (!checks.notifyConfigured) {
-    suggestions.push(`Re-run "oh-my-ralpha setup --scope ${scope} --force" to restore notify-based session logging capture.`);
   }
 
   return {
@@ -55,12 +50,13 @@ export function doctorReport({ runtimeRoot, codexHome, cwd = process.cwd(), scop
       'install',
       'doctor',
       'init',
-      'plan scaffold',
+      'PRD/test-spec scaffold',
       'interview scaffold',
       'state read/write/clear',
       'trace append/show',
       'route',
-      'MCP state/trace/runtime servers',
+      'workflow route/init/plan/interview',
+      'single MCP command-group server',
     ],
     companions,
     suggestions,

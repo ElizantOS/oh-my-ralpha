@@ -72,9 +72,50 @@ async function requestMessages(scriptPath, requests, expectedCount) {
   return responses;
 }
 
+async function requestNewlineMessages(scriptPath, requests, expectedCount) {
+  const child = spawn(process.execPath, [scriptPath], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+
+  let stdout = '';
+  let stderr = '';
+  const responses = [];
+
+  child.stdout.on('data', (chunk) => {
+    stdout += chunk.toString('utf-8');
+    const lines = stdout.split('\n');
+    stdout = lines.pop() ?? '';
+    for (const line of lines) {
+      if (line.trim()) responses.push(JSON.parse(line));
+    }
+  });
+
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk.toString('utf-8');
+  });
+
+  for (const request of requests) {
+    child.stdin.write(`${JSON.stringify(request)}\n`);
+  }
+  child.stdin.end();
+
+  await new Promise((resolve, reject) => {
+    child.on('exit', (code) => {
+      if (code !== 0) {
+        reject(new Error(`server exited with code ${code}: ${stderr}`));
+        return;
+      }
+      resolve();
+    });
+  });
+
+  assert.equal(responses.length, expectedCount, stderr);
+  return responses;
+}
+
 describe('oh-my-ralpha MCP stdio servers', () => {
-  it('runtime server speaks initialize and tools/list over stdio', async () => {
-    const scriptPath = join(process.cwd(), 'src', 'mcp', 'runtime-server.mjs');
+  it('unified server speaks initialize and tools/list over Content-Length stdio', async () => {
+    const scriptPath = join(process.cwd(), 'src', 'mcp', 'server.mjs');
     const responses = await requestMessages(
       scriptPath,
       [
@@ -85,9 +126,32 @@ describe('oh-my-ralpha MCP stdio servers', () => {
       2,
     );
 
-    assert.equal(responses[0].result.serverInfo.name, 'oh-my-ralpha-runtime');
+    assert.equal(responses[0].result.serverInfo.name, 'oh-my-ralpha');
     const toolNames = responses[1].result.tools.map((tool) => tool.name);
-    assert.ok(toolNames.includes('doctor_report'));
-    assert.ok(toolNames.includes('route_prompt'));
+    assert.deepEqual(toolNames, [
+      'ralpha_state',
+      'ralpha_trace',
+      'ralpha_workflow',
+      'ralpha_admin',
+    ]);
+  });
+
+  it('unified server speaks initialize and tools/list with newline JSON SDK stdio', async () => {
+    const responses = await requestNewlineMessages(
+      join(process.cwd(), 'src', 'mcp', 'server.mjs'),
+      [
+        { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} },
+        { jsonrpc: '2.0', method: 'notifications/initialized', params: {} },
+        { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
+      ],
+      2,
+    );
+
+    assert.deepEqual(responses[1].result.tools.map((tool) => tool.name), [
+      'ralpha_state',
+      'ralpha_trace',
+      'ralpha_workflow',
+      'ralpha_admin',
+    ]);
   });
 });

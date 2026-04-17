@@ -9,6 +9,7 @@
   },
   "scripts": {
     "test": "node --test",
-    "doctor": "node ./bin/oh-my-ralpha.js doctor"
+    "doctor": "node ./bin/oh-my-ralpha.js doctor",
+    "docker:shell": "node ./scripts/docker-codex-shell.mjs"
   }
 }

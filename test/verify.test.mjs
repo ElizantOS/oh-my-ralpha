@@ -33,14 +33,8 @@ describe('oh-my-ralpha verify command surface', () => {
     const checkNames = result.checks.map((entry) => entry.name);
     assert.ok(checkNames.includes('installed_cli'));
     assert.ok(checkNames.includes('native_hook_prompt_submit'));
-    assert.ok(checkNames.includes('mcp_state_handshake'));
-    assert.ok(checkNames.includes('mcp_trace_handshake'));
-    assert.ok(checkNames.includes('mcp_runtime_handshake'));
-    assert.ok(checkNames.includes('notify_log_capture'));
-    assert.ok(checkNames.includes('tool_hook_log_capture'));
-    assert.equal(result.doctor.checks.mcpStateConfigured, true);
-    assert.equal(result.doctor.checks.mcpTraceConfigured, true);
-    assert.equal(result.doctor.checks.mcpRuntimeConfigured, true);
-    assert.equal(result.doctor.checks.notifyConfigured, true);
+    assert.ok(checkNames.includes('mcp_handshake'));
+    assert.equal(result.doctor.checks.mcpConfigured, true);
+    assert.equal(result.doctor.checks.legacyMcpConfigured, false);
   });
 });

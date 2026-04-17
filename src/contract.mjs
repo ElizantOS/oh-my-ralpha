@@ -6,11 +6,10 @@ export const OH_MY_RALPHA_STATE_DEFAULTS = Object.freeze({
 });
 
 export const OH_MY_RALPHA_TEAM_LANES = Object.freeze([
-  'analyst',
   'architect',
-  'team-executor',
-  'code-simplifier',
   'code-reviewer',
+  'code-simplifier',
+  'ai-slop-cleaner',
 ]);
 
 export const OH_MY_RALPHA_REQUIRED_TRUTH_SOURCES = Object.freeze([

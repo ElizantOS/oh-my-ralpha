@@ -21,32 +21,32 @@ export function resolveCodexHome(explicit) {
   return join(homedir(), '.codex');
 }
 
-export function omxDir(cwd) {
+export function workingModelDir(cwd) {
   return join(resolveRepoRoot(cwd), '.codex', DEFAULT_SKILL_NAME, 'working-model');
 }
 
-function omxSubdir(cwd, name) {
-  return join(omxDir(cwd), name);
+function workingModelSubdir(cwd, name) {
+  return join(workingModelDir(cwd), name);
 }
 
-export function omxContextDir(cwd) {
-  return omxSubdir(cwd, 'context');
+export function workingModelContextDir(cwd) {
+  return workingModelSubdir(cwd, 'context');
 }
 
-export function omxStateDir(cwd) {
-  return omxSubdir(cwd, 'state');
+export function workingModelStateDir(cwd) {
+  return workingModelSubdir(cwd, 'state');
 }
 
-export function omxLogsDir(cwd) {
-  return omxSubdir(cwd, 'logs');
+export function workingModelLogsDir(cwd) {
+  return workingModelSubdir(cwd, 'logs');
 }
 
-export function omxPlansDir(cwd) {
-  return omxSubdir(cwd, 'plans');
+export function workingModelPlansDir(cwd) {
+  return workingModelSubdir(cwd, 'plans');
 }
 
-export function omxSpecsDir(cwd) {
-  return omxSubdir(cwd, 'specs');
+export function workingModelSpecsDir(cwd) {
+  return workingModelSubdir(cwd, 'specs');
 }
 
 function codexHomeSubdir(codexHome, name) {
@@ -55,6 +55,14 @@ function codexHomeSubdir(codexHome, name) {
 
 export function installedSkillsDir(codexHome) {
   return codexHomeSubdir(codexHome, 'skills');
+}
+
+export function installedPromptsDir(codexHome) {
+  return codexHomeSubdir(codexHome, 'prompts');
+}
+
+export function installedAgentsDir(codexHome) {
+  return codexHomeSubdir(codexHome, 'agents');
 }
 
 export function installedSkillDir(codexHome, skillName = DEFAULT_SKILL_NAME) {

@@ -28,36 +28,51 @@ function textContent(data) {
   };
 }
 
-function encodeMessage(payload) {
+function encodeMessage(payload, framing = 'content-length') {
+  if (framing === 'newline') {
+    return Buffer.from(`${JSON.stringify(payload)}\n`, 'utf-8');
+  }
   const body = Buffer.from(JSON.stringify(payload), 'utf-8');
   const header = Buffer.from(`Content-Length: ${body.length}\r\n\r\n`, 'utf-8');
   return Buffer.concat([header, body]);
 }
 
 function decodeMessages(buffer) {
-  const messages = [];
+  const records = [];
   let rest = buffer;
 
   while (rest.length > 0) {
-    const separatorIndex = rest.indexOf('\r\n\r\n');
-    if (separatorIndex === -1) break;
+    const textPrefix = rest.slice(0, Math.min(rest.length, 64)).toString('utf-8');
+    if (/^Content-Length:/i.test(textPrefix)) {
+      const separatorIndex = rest.indexOf('\r\n\r\n');
+      if (separatorIndex === -1) break;
 
-    const headerText = rest.slice(0, separatorIndex).toString('utf-8');
-    const lengthMatch = headerText.match(/Content-Length:\s*(\d+)/i);
-    if (!lengthMatch) {
-      throw new Error('missing Content-Length header');
+      const headerText = rest.slice(0, separatorIndex).toString('utf-8');
+      const lengthMatch = headerText.match(/Content-Length:\s*(\d+)/i);
+      if (!lengthMatch) {
+        throw new Error('missing Content-Length header');
+      }
+
+      const bodyLength = Number.parseInt(lengthMatch[1], 10);
+      const bodyStart = separatorIndex + 4;
+      if (rest.length < bodyStart + bodyLength) break;
+
+      const bodyText = rest.slice(bodyStart, bodyStart + bodyLength).toString('utf-8');
+      records.push({ message: JSON.parse(bodyText), framing: 'content-length' });
+      rest = rest.slice(bodyStart + bodyLength);
+      continue;
     }
 
-    const bodyLength = Number.parseInt(lengthMatch[1], 10);
-    const bodyStart = separatorIndex + 4;
-    if (rest.length < bodyStart + bodyLength) break;
+    const newlineIndex = rest.indexOf('\n');
+    if (newlineIndex === -1) break;
 
-    const bodyText = rest.slice(bodyStart, bodyStart + bodyLength).toString('utf-8');
-    messages.push(JSON.parse(bodyText));
-    rest = rest.slice(bodyStart + bodyLength);
+    const line = rest.slice(0, newlineIndex).toString('utf-8').replace(/\r$/, '');
+    rest = rest.slice(newlineIndex + 1);
+    if (!line.trim()) continue;
+    records.push({ message: JSON.parse(line), framing: 'newline' });
   }
 
-  return { messages, rest };
+  return { records, rest };
 }
 
 function buildInitializeResult(serverInfo) {
@@ -135,10 +150,10 @@ export function createMcpServer({ name, version, tools }) {
         buffer = Buffer.concat([buffer, Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))]);
         const decoded = decodeMessages(buffer);
         buffer = decoded.rest;
-        for (const message of decoded.messages) {
+        for (const { message, framing } of decoded.records) {
           const response = await handleRequest(message);
           if (response) {
-            output.write(encodeMessage(response));
+            output.write(encodeMessage(response, framing));
           }
         }
       }

@@ -1,10 +1,10 @@
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { omxLogsDir } from './paths.mjs';
+import { workingModelLogsDir } from './paths.mjs';
 
 export function getTracePath(cwd) {
-  return join(omxLogsDir(cwd), 'oh-my-ralpha-trace.jsonl');
+  return join(workingModelLogsDir(cwd), 'oh-my-ralpha-trace.jsonl');
 }
 
 export async function appendTraceEvent({
@@ -14,7 +14,7 @@ export async function appendTraceEvent({
   nowIso = new Date().toISOString(),
 }) {
   const tracePath = getTracePath(cwd);
-  await mkdir(omxLogsDir(cwd), { recursive: true });
+  await mkdir(workingModelLogsDir(cwd), { recursive: true });
   const event = { timestamp: nowIso, type, metadata };
   await appendFile(tracePath, `${JSON.stringify(event)}\n`, 'utf-8');
   return event;

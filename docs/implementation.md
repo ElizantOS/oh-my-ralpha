@@ -15,19 +15,16 @@ The goal is not just to ship prose instructions. The goal is to ship a workflow 
 - create and maintain durable truth-source files
 - integrate with Codex hooks and MCP
 - survive long-running work without drifting
-- expose enough observability to debug behavior changes
 
-This document explains the current implementation requirements, architecture, and Codex integration model.
+The runtime no longer includes the former prompt/tool/notify session logging feature. It should route and manage state without recording user prompt, tool input/output, or turn payload logs.
 
-## Implementation requirements
+## Implementation Requirements
 
-The repository was built to satisfy these requirement groups.
-
-### 1. Workflow requirements
+### 1. Workflow Requirements
 
 The workflow must:
 
-- preserve Ralph’s persistence backbone
+- preserve Ralph's persistence backbone
 - require pre-context grounding
 - require plan-first execution for vague prompts
 - keep a single authoritative TODO workboard
@@ -41,14 +38,15 @@ These requirements are encoded in:
 - [skills/oh-my-ralpha/SKILL.md](../skills/oh-my-ralpha/SKILL.md)
 - [skills/oh-my-ralpha/FLOW.md](../skills/oh-my-ralpha/FLOW.md)
 
-### 2. Runtime requirements
+### 2. Runtime Requirements
 
 The runtime must:
 
 - install without depending on the original source checkout path
+- install bundled companion prompts/native agents and companion skills from this package
 - expose state and trace operations locally
 - scaffold context / todo / rounds / planning artifacts
-- integrate with Codex native hooks
+- integrate with Codex native hooks for startup, prompt routing, and Stop protection
 - expose MCP tool surfaces
 - provide a one-command verification path
 
@@ -59,30 +57,11 @@ These requirements are primarily implemented in:
 - [src/cli.mjs](../src/cli.mjs)
 - [src/verify.mjs](../src/verify.mjs)
 
-### 3. Debugging requirements
-
-The runtime must make post-hoc debugging practical.
-
-That is why `@LOG` was added. The feature must:
-
-- enable session-scoped logging from inside Codex
-- log prompt-side hook activity
-- log tool lifecycle activity
-- log post-turn notify payloads
-- avoid cross-session contamination
-- preserve existing user notify behavior instead of silently clobbering it
-
-These requirements are implemented in:
-
-- [src/session-log.mjs](../src/session-log.mjs)
-- [src/native-hook.mjs](../src/native-hook.mjs)
-- [src/notify.mjs](../src/notify.mjs)
-
-## Core architecture
+## Core Architecture
 
 The package is split into five layers.
 
-### Skill layer
+### Skill Layer
 
 The skill layer defines the behavioral contract.
 
@@ -95,11 +74,12 @@ It is responsible for:
 
 - workflow semantics
 - lane definitions
+- bundled companion expectations
 - truth-source expectations
 - done-gate semantics
 - user-facing capability framing
 
-### Truth-source layer
+### Truth-Source Layer
 
 The truth-source layer manages the `.codex/oh-my-ralpha/working-model` file model.
 
@@ -114,11 +94,27 @@ It is responsible for:
 
 - context snapshot creation
 - todo/rounds scaffolding
-- PRD/test-spec/deep-interview scaffolding
+- PRD/test-spec/interview scaffolding
 - mode-state persistence
 - trace persistence
 
-### Routing layer
+### Companion Layer
+
+The package carries a small copied companion surface from the original OMX tree so the standalone install does not depend on `/oh-my-codex` at runtime.
+
+Bundled role prompts/native agent configs:
+
+- `architect`
+- `code-reviewer`
+- `code-simplifier`
+
+Bundled companion skills:
+
+- `ai-slop-cleaner`
+
+The companion sources live under `companions/prompts/` and `companions/skills/` so Codex does not auto-discover them while developing this repository. `setup` installs them into the target Codex home under `prompts/`, `agents/`, and `skills/`. The oh-my-ralpha MCP/CLI remains intentionally narrow; it does not expose execution commands for those roles. Implementation stays in the main thread for this standalone package; `team-executor` is not bundled because the OMX team runtime is not bundled. Invoking `$oh-my-ralpha` is treated as explicit user intent for the workflow's per-slice native-subagent acceptance contract. If native subagents are unavailable, the workflow records degraded-mode evidence in rounds/trace instead of silently treating a manual pass as equivalent.
+
+### Routing Layer
 
 The routing layer decides whether a prompt should enter `oh-my-ralpha` and whether it should be gated back to planning first.
 
@@ -135,7 +131,7 @@ It is responsible for:
 - plan-first gating
 - skill activation state bootstrap
 
-### Integration layer
+### Integration Layer
 
 The integration layer connects the package to Codex.
 
@@ -143,7 +139,6 @@ Files:
 
 - [src/setup.mjs](../src/setup.mjs)
 - [src/native-hook.mjs](../src/native-hook.mjs)
-- [src/notify.mjs](../src/notify.mjs)
 - [src/mcp/protocol.mjs](../src/mcp/protocol.mjs)
 - [src/mcp/state-server.mjs](../src/mcp/state-server.mjs)
 - [src/mcp/trace-server.mjs](../src/mcp/trace-server.mjs)
@@ -155,10 +150,9 @@ It is responsible for:
 - `.codex/config.toml` integration
 - `.codex/hooks.json` integration
 - native hook dispatch
-- notify capture
 - MCP server exposure
 
-### Verification layer
+### Verification Layer
 
 The verification layer proves the package actually works.
 
@@ -174,19 +168,16 @@ It is responsible for:
 - MCP handler checks
 - MCP stdio protocol checks
 - release-style project-scope verification
-- `@LOG` regression coverage
 
-## Codex integration plan
+## Codex Integration Plan
 
-The current integration strategy uses three channels.
+The current integration strategy uses two channels.
 
-### 1. Native hooks
+### 1. Native Hooks
 
 The package currently owns these native hook surfaces:
 
 - `SessionStart`
-- `PreToolUse`
-- `PostToolUse`
 - `UserPromptSubmit`
 - `Stop`
 
@@ -200,110 +191,25 @@ Design intent:
 - `UserPromptSubmit`
   - route prompt keywords
   - apply plan-first gate
-  - enable `@LOG`
-- `PreToolUse`
-  - record the “before” side of tool execution
-- `PostToolUse`
-  - record the “after” side of tool execution
 - `Stop`
-  - record stop attempts
   - preserve active-mode stop semantics
 
-### 2. notify
+### 2. MCP
 
-Native hooks do not give the whole turn transcript by themselves.
-So the package also integrates through Codex `notify`.
+The package registers one progressive MCP server in `.codex/config.toml`:
 
-The installed `notify` entry points to `oh-my-ralpha`'s own notify handler, which:
+- `oh_my_ralpha`
 
-1. records the notify payload into the session log if `@LOG` is active
-2. forwards the same payload to any pre-existing non-managed notify command through a chain file
+It exposes four grouped tools so Codex can directly call:
 
-This is important because many users already have a notify pipeline.
-The design goal is to preserve that behavior while adding session logging, not replace it.
+- `ralpha_state` for active mode state read/write/clear
+- `ralpha_trace` for evidence and recovery trace append/show
+- `ralpha_workflow` for route/init/plan/interview task shaping
+- `ralpha_admin` for doctor/verify/setup/uninstall maintenance
 
-### 3. MCP
+The package verifies the unified server in release preflight.
 
-The package also registers three MCP servers in `.codex/config.toml`:
-
-- `oh_my_ralpha_state`
-- `oh_my_ralpha_trace`
-- `oh_my_ralpha_runtime`
-
-These exist so Codex can directly call:
-
-- state tools
-- trace tools
-- runtime helpers such as route/init/doctor/setup/uninstall/log readout
-
-The package now verifies all three servers in release preflight.
-
-## How @LOG works
-
-`@LOG` is a session-debugging feature, not just a trace toggle.
-
-### Activation
-
-When `@LOG` appears in `UserPromptSubmit`:
-
-1. the hook detects the directive
-2. a session-log state file is created/updated
-3. a stable scope id is chosen
-4. the log file path is persisted
-5. a `logging-enabled` control event is written
-
-### Scope resolution
-
-The logger tries to avoid both drift and accidental cross-session contamination.
-
-Scope priority:
-
-1. `session_id`
-2. `thread_id`
-3. `transcript_path`
-4. `session_pid` / Codex pid
-5. workspace-derived fallback
-
-Important rule:
-
-- when later events are missing identifiers and there is more than one active logging session in the workspace, the logger does **not** assign that event to the “latest” session
-- it drops the ambiguous event instead of misattributing it
-
-That tradeoff was chosen because this feature is for debugging. Wrong attribution is worse than missing one ambiguous event.
-
-### Captured surfaces
-
-Once active, the logger records:
-
-- `logging-enabled`
-- `logging-disabled`
-- `UserPromptSubmit`
-- `PreToolUse`
-- `PostToolUse`
-- `Stop`
-- notify turn payloads
-
-The log entries include:
-
-- timestamp
-- scope id
-- channel
-- event name
-- summarized fields for quick inspection
-- raw payload for forensic debugging
-
-### Inspection
-
-Current CLI surfaces:
-
-```bash
-oh-my-ralpha log status --session <session-id>
-oh-my-ralpha log show --session <session-id> --limit 50
-oh-my-ralpha log disable --session <session-id>
-oh-my-ralpha log clear-state --session <session-id>
-```
-
-## Ownership model
+## Ownership Model
 
 The package uses a conservative ownership policy.
 
@@ -318,9 +224,8 @@ The package uses a conservative ownership policy.
 
 - `codex_hooks = true` is added when needed
 - managed MCP blocks are appended
-- managed `notify` is installed
-- a pre-existing non-managed `notify` is chained and preserved
-- uninstall removes only the managed `notify`/MCP content
+- existing user `notify` entries are preserved and not wrapped
+- uninstall removes only managed MCP content plus any old managed notify line from previous releases
 
 ### installed runtime
 
@@ -328,11 +233,11 @@ The package uses a conservative ownership policy.
 - launcher points to the installed runtime, not the source checkout
 - this makes the install relocatable
 
-## Verification model
+## Verification Model
 
 There are two levels of verification.
 
-### Test suite
+### Test Suite
 
 The repository currently tests:
 
@@ -342,9 +247,9 @@ The repository currently tests:
 - MCP handler behavior
 - MCP stdio handshake
 - release-style verify
-- `@LOG` activation and capture
+- absence of the removed session-log MCP tools
 
-### Release preflight
+### Release Preflight
 
 The package also provides:
 
@@ -357,51 +262,38 @@ That preflight currently checks:
 - installed launcher present
 - config present
 - hooks present
-- notify configured
-- native `UserPromptSubmit` logging path
-- MCP state handshake
-- MCP trace handshake
-- MCP runtime handshake
-- tool and notify capture relevant to the logging feature
+- native `UserPromptSubmit` route path
+- unified MCP handshake
 
-## Current limitations
+## Current Limitations
 
 This package is release-ready as a standalone repo, but it is still intentionally smaller than full `oh-my-codex`.
 
 Notable limits:
 
-- it does not attempt to reimplement the entire OMX team runtime
-- it does not expose every original OMX MCP/tool surface
-- the logging model only sees the surfaces Codex exposes through hooks and notify
-- it does not capture model-internal reasoning, only observable runtime behavior
+- it does not attempt to reimplement the entire external team runtime
+- it does not expose every historical external MCP/tool surface
+- it does not record prompt, tool, or notify payload logs
 
-## Suggested next extensions
+## Suggested Next Extensions
 
 The most natural next additions are:
 
-1. `log export`
-   - package one session log plus state snapshot for sharing/debugging
-2. `log diff`
-   - compare pre/post skill behavior across two sessions
-3. richer notify health reporting
-   - show whether chained upstream notify is succeeding or failing
-4. optional log retention policy
-   - clean up old session logs automatically
+1. richer doctor reporting for hook/MCP health
+2. optional stale state cleanup under `.codex/oh-my-ralpha/working-model`
+3. additional contract tests for future hook event changes
 
-## Reference files
+## Reference Files
 
 Core implementation:
 
 - [src/cli.mjs](../src/cli.mjs)
 - [src/setup.mjs](../src/setup.mjs)
 - [src/native-hook.mjs](../src/native-hook.mjs)
-- [src/notify.mjs](../src/notify.mjs)
-- [src/session-log.mjs](../src/session-log.mjs)
 - [src/verify.mjs](../src/verify.mjs)
 
 Tests:
 
-- [test/session-log.test.mjs](../test/session-log.test.mjs)
 - [test/setup-integration.test.mjs](../test/setup-integration.test.mjs)
 - [test/mcp-integration.test.mjs](../test/mcp-integration.test.mjs)
 - [test/mcp-stdio.test.mjs](../test/mcp-stdio.test.mjs)

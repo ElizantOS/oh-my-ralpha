@@ -7,7 +7,7 @@ This skill is Ralph specialized for the workflow that actually worked during the
 1. **Capture context first**
    - Reuse a context snapshot instead of rediscovering the problem every turn.
 
-2. **Use persistent OMX state**
+2. **Use persistent working-model state**
    - State lifecycle still belongs in `state_write` / `state_read` / `state_clear`.
 
 3. **Verify before claiming done**
@@ -48,11 +48,20 @@ This skill is Ralph specialized for the workflow that actually worked during the
    - Large TODOs are decomposed before implementation instead of being executed as one long opaque thread.
 
 3. **Verification stays layered**
-   - Narrow proof happens before wide regressions, then simplification, then post-simplification re-verification.
+   - Narrow proof happens first.
+   - Every completed slice then goes through mandatory spawned architect, code-reviewer, and code-simplifier acceptance.
+   - Manual acceptance is only a degraded fallback when the host runtime lacks native subagents, and the fallback must be recorded.
+   - Final cleanup runs through ai-slop-cleaner, followed by post-deslop regression.
+
+4. **Stop protection is not verification**
+   - The native Stop hook prevents an uncleared active workflow from ending silently.
+   - Explicit pauses stay `active: true` with `current_phase: "paused"` plus resume state.
+   - Inactive non-terminal pseudo-pauses are blocked because they hide unfinished work.
+   - Team-style verification still belongs to the loop: per-slice fresh evidence, architect/code-reviewer/code-simplifier slice acceptance, final deslop, and post-deslop regression.
 
 ## Built-in runtime support
 
-This standalone package ships JS fallbacks for the OMX surfaces that `oh-my-ralpha` depends on:
+This standalone package ships JS fallbacks for the Codex integration surfaces that `oh-my-ralpha` depends on:
 
 - install
 - doctor
@@ -60,7 +69,6 @@ This standalone package ships JS fallbacks for the OMX surfaces that `oh-my-ralp
 - state read/write/clear
 - trace append/show
 - route activation
-- plan scaffold
-- interview scaffold
+- workflow route/init/plan/interview
 
-That means a fresh Codex can use the repository even before the full OMX runtime stack is present.
+That means a fresh Codex can use the repository with only the local `.codex/oh-my-ralpha/working-model` files and the built-in runtime.

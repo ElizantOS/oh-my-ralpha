@@ -44,6 +44,22 @@ function keywordPattern(keyword) {
   return new RegExp(`\\b${escapeRegex(keyword)}\\b`, 'i');
 }
 
+function hasImplicitWorkflowIntent(text, phrase) {
+  const normalizedPhrase = phrase.toLowerCase();
+  if (normalizedPhrase !== 'oh-my-ralpha' && normalizedPhrase !== 'ralpha') {
+    return true;
+  }
+
+  const escapedPhrase = escapeRegex(normalizedPhrase);
+  const patterns = [
+    new RegExp(`\\b(?:use|run|start|enable|launch|invoke|activate|resume|continue|finish|execute)\\s+(?:the\\s+)?${escapedPhrase}\\b`, 'i'),
+    new RegExp(`\\b${escapedPhrase}\\s+(?:mode|workflow|loop|run|continue|resume|finish|execute|fix|update|implement|ship|keep\\s+going)\\b`, 'i'),
+    new RegExp(`\\b(?:用|使用|启动|运行|执行|继续|完成)\\s*${escapedPhrase}\\b`, 'i'),
+    new RegExp(`\\b${escapedPhrase}\\s*(?:模式|工作流|继续|执行|运行|完成|推进)\\b`, 'i'),
+  ];
+  return patterns.some((pattern) => pattern.test(text));
+}
+
 export function detectExplicitTrigger(text) {
   const matches = text.match(/(?:^|[^\w])\$([a-z][a-z0-9-]*)\b/i);
   if (!matches) return null;
@@ -55,7 +71,7 @@ export function detectExplicitTrigger(text) {
 
 export function detectImplicitTrigger(text) {
   for (const phrase of OH_MY_RALPHA_TRIGGER_PHRASES) {
-    if (keywordPattern(phrase).test(text)) {
+    if (keywordPattern(phrase).test(text) && hasImplicitWorkflowIntent(text, phrase)) {
       return { keyword: phrase, skill: 'oh-my-ralpha', priority: 8 };
     }
   }

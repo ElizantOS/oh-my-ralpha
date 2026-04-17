@@ -1,14 +1,14 @@
 ---
 name: oh-my-ralpha
-description: Ralph-derived persistent execution loop centered on OMX truth-source files
+description: Ralph-derived persistent execution loop with mandatory native-subagent slice acceptance centered on .codex working-model truth-source files
 ---
 
 [OH-MY-RALPHA + RALPH - ITERATION {{ITERATION}}/{{MAX}}]
 
-Continue the task from the current OMX truth-source files. Do not restart discovery if the next slice is already clear.
+Continue the task from the current `.codex/oh-my-ralpha/working-model` truth-source files. Do not restart discovery if the next slice is already clear.
 
 <Purpose>
-Oh My Ralpha is a Ralph-derived persistence workflow. It keeps Ralph's full useful execution skeleton — pre-context grounding, persistent state, automatic continuation, fresh verification, architect review, deslop, post-deslop regression, and clean cleanup — but specializes the loop around the OMX files that actually drove our parity effort:
+Oh My Ralpha is a Ralph-derived persistence workflow. It keeps Ralph's full useful execution skeleton — pre-context grounding, persistent state, automatic continuation, fresh verification, architect review, deslop, post-deslop regression, and clean cleanup — but specializes the loop around the `.codex/oh-my-ralpha/working-model` files that actually drove our parity effort:
 
 - `.codex/oh-my-ralpha/working-model/context/...` for shared grounding
 - `.codex/oh-my-ralpha/working-model/state/...-todo.md` for the truth-source workboard
@@ -20,12 +20,12 @@ Oh My Ralpha is a Ralph-derived persistence workflow. It keeps Ralph's full usef
 - The task requires real completion, not best-effort progress
 - There is already a TODO ledger, audit list, or obvious remaining slices
 - The user says "继续推进", "继续完成", "收掉这些 TODO", "keep moving", "finish the remaining work", or "继续处理"
-- The user types `@LOG` because they want the current session fully recorded for debugging
 - The work needs to run for a long time without drifting or waiting for repeated "continue" nudges
+- The user invokes `$oh-my-ralpha`, `$ralpha`, or an oh-my-ralpha trigger and thereby requests this workflow's native-subagent slice acceptance contract
 </Use_When>
 
 <Do_Not_Use_When>
-- The request is still vague or exploratory -- use `plan`
+- The request is still vague or exploratory and does not invoke oh-my-ralpha -- use ordinary planning first
 - The user wants a full autonomous pipeline -- use `autopilot`
 - The task is a tiny one-shot fix with one obvious proof command -- just do it directly
 - The user explicitly wants manual control over every subtask -- use `ultrawork` or direct delegation
@@ -45,14 +45,15 @@ Oh My Ralpha is Ralph with that specialization baked in.
 
 <Execution_Policy>
 - Keep Ralph's persistence model: do not stop after partial progress if a clear next slice exists
-- Use OMX files as the source of truth, not transient conversation memory
+- Use `.codex/oh-my-ralpha/working-model` files as the source of truth, not transient conversation memory
 - Use one authoritative workboard and one rounds ledger; never rely on an implicit checklist
 - Keep exactly one slice `in_progress`
 - If the rounds ledger already has `next_todo` or `current_focus`, continue from it automatically instead of waiting for the user to say "继续"
 - Fire independent specialist lanes simultaneously when they materially help
 - Use `run_in_background: true` for long operations (builds, installs, full test suites)
 - Deliver the full implementation: no scope reduction, no partial completion, no deleting tests to make them pass
-- Before final completion: broad regressions, relevant typecheck/lint, architect verification, code simplification, post-simplification regression, and final artifact sync
+- Before final completion: broad regressions, relevant typecheck/lint, slice acceptance evidence, final deslop, post-deslop regression, and final artifact sync
+- Treat oh-my-ralpha invocation as explicit user intent to use the required per-slice native subagents: `architect`, `code-reviewer`, and `code-simplifier`
 </Execution_Policy>
 
 <Steps>
@@ -70,7 +71,7 @@ Oh My Ralpha is Ralph with that specialization baked in.
    - Reuse or create `.codex/oh-my-ralpha/working-model/state/{task-slug}-todo.md`
    - Reuse or create `.codex/oh-my-ralpha/working-model/state/{task-slug}-rounds.json`
    - If the current TODO is larger than one session, decompose it into smaller sub-TODOs such as `P0-01A`, `P0-01B`, `P0-01C`
-   - Use `analyst` to frame decomposition and `architect` to validate slice boundaries before implementation starts
+   - Use `architect` to validate large-slice boundaries before implementation starts
    - Do not implement a large TODO directly if sub-TODO decomposition is missing
 
 1. **Review progress**:
@@ -82,32 +83,32 @@ Oh My Ralpha is Ralph with that specialization baked in.
 2. **Continue from where you left off**:
    - If a slice is already `in_progress`, resume it
    - Otherwise promote the next pending blocker to `in_progress`
-   - Never require repeated user "continue" messages when the next slice is obvious from OMX files
+   - Never require repeated user "continue" messages when the next slice is obvious from working-model files
 
-3. **Delegate lanes and implement the active slice**:
-   - Default lane map:
-     - `analyst`: frame and refine large TODO decomposition
-     - `architect`: validate plan boundaries and final architecture decisions
-     - `team-executor`: main implementation lane
-     - `code-simplifier`: post-green simplification lane
-     - `code-reviewer`: final quality closeout lane
-   - Large TODO decomposition is serial:
-     - `analyst` first
-     - then `architect`
-   - Implementation may use bounded parallel lanes:
-     - main implementation lane
-     - bounded test lane
-   - Final review may run in parallel:
-     - `architect`
-     - `code-reviewer`
+3. **Implement the active slice**:
+   - The leader/main thread owns implementation in this standalone package
+   - This standalone package does not bundle or emulate the OMX `team-executor` runtime
+   - Default acceptance lane map:
+     - `architect`: validate slice boundaries and architecture decisions
+     - `code-reviewer`: verify code quality, correctness, and request fit
+     - `code-simplifier`: simplify changed code while preserving behavior
+     - `ai-slop-cleaner`: final closeout deslop pass only
+   - Large TODO decomposition is leader-owned, then `architect` validates the slice boundary
+   - Slice acceptance is mandatory and must use native subagents when the host provides them:
+     - spawn `architect`
+     - spawn `code-reviewer`
+     - spawn `code-simplifier`
+   - Acceptance prompts are role prompts, not workflow invocations; do not include explicit `$ralpha` / `$oh-my-ralpha` tokens in spawned acceptance prompts
+   - Plain references to the package/workflow name are safe in acceptance prompts because the router only treats bare `ralpha` / `oh-my-ralpha` as a workflow trigger when explicit workflow intent is present
+   - Run acceptance agents as soon as the slice has fresh proof; do not replace them with a manual pass unless native subagents are unavailable in the host runtime
 
 4. **Run long operations in background**:
    - Builds, installs, and broad test suites use `run_in_background: true`
 
-5. **Visual task gate (when screenshot/reference images are present)**:
-   - Keep Ralph's visual behavior:
-     - use `visual-verdict` before edits for screenshot-driven work
-     - use `web-clone` for URL-based cloning work
+5. **Optional host visual helpers (when screenshot/reference images are present)**:
+   - This standalone package does not bundle visual/web-clone helpers
+   - If the host already provides `visual-verdict` or `web-clone`, use them for screenshot-driven or URL-cloning work
+   - Otherwise record the missing optional helper in rounds/trace and continue with manual visual evidence
 
 6. **Verify the slice with fresh evidence**:
    - Run the narrowest command that proves the change
@@ -118,21 +119,17 @@ Oh My Ralpha is Ralph with that specialization baked in.
    - Add or update regression coverage so the slice is locked by tests, not remembered informally
    - Do not treat a slice as done until behavior is proven and tests are solidified
 
-7. **Architect verification**:
-   - Run architect verification for the completed slice or milestone
-   - For final closeout, run `architect` and `code-reviewer` in parallel and require both to pass
+7. **Slice acceptance bundle**:
+   - Spawn `architect`, `code-reviewer`, and `code-simplifier` for every completed slice
+   - Use role-scoped acceptance prompts such as "Review slice P0-01 for the workflow package"; do not prefix them with `$ralpha` or `$oh-my-ralpha`
+   - Treat these as slice-level acceptance gates, not only final closeout gates
+   - Do not mark a slice `completed` until all three acceptance agents have returned PASS/APPROVED or all reported issues have been fixed and re-verified
+   - If `code-simplifier` changes files, re-run the narrow slice proof and any affected tests before moving on
+   - If `code-simplifier` changes behavior or creates uncertainty, revert/fix the simplification and repeat acceptance
+   - Record all three acceptance results and any follow-up verification in the workboard and rounds ledger
+   - If native subagent spawning is unavailable, record `degraded_missing_subagent_runtime` in rounds/trace; manual acceptance is a fallback note, not equivalent to subagent approval
 
-7.5 **Mandatory Deslop Pass**:
-   - After Step 7 passes, run `oh-my-codex:ai-slop-cleaner` on all files changed during the session
-   - Scope the cleaner to changed files only
-   - Run the cleaner in standard mode, not `--review`
-   - If the prompt contains `--no-deslop`, skip this pass and use the most recent successful pre-simplification verification evidence
-
-7.6 **Regression Re-verification**:
-   - After the simplification pass, re-run tests/build/lint and confirm they still pass
-   - If post-simplification regression fails, fix and retry before moving on
-
-8. **Update the OMX truth-source files**:
+8. **Update the `.codex/oh-my-ralpha/working-model` truth-source files**:
    - Mark the slice `completed`
    - Record exact evidence in the workboard
    - Update the rounds ledger with:
@@ -144,7 +141,17 @@ Oh My Ralpha is Ralph with that specialization baked in.
      - remaining TODOs
    - `state_write({mode: "oh-my-ralpha", iteration: <current>, current_phase: "executing", state: {current_slice: "<id>"}})`
 
-9. **Sync final artifacts**:
+9. **Final deslop pass**:
+   - After all slices are accepted, run `ai-slop-cleaner` on all files changed during the session
+   - Scope the cleaner to changed files only
+   - Run the cleaner in standard mode, not `--review`
+   - If the prompt contains `--no-deslop`, skip this pass and use the most recent successful pre-deslop verification evidence
+
+9.5 **Post-deslop regression**:
+   - After the final deslop pass, re-run tests/build/lint and confirm they still pass
+   - If post-deslop regression fails, fix and retry before final closeout
+
+9.8 **Sync final artifacts**:
    - Ensure workboard, rounds ledger, final verdict, and any audit doc all agree
    - Never leave one artifact saying `pending` and another saying `approved`
 
@@ -152,8 +159,9 @@ Oh My Ralpha is Ralph with that specialization baked in.
    - Only claim done when:
      - no `pending` or `in_progress` items remain in the workboard
      - fresh verification is green
-     - architect verification passed for the final milestone
-     - code-reviewer final closeout passed
+     - architect / code-reviewer / code-simplifier acceptance passed for every completed slice
+     - final `ai-slop-cleaner` pass completed, unless `--no-deslop` explicitly skipped it
+     - post-deslop regression passed, unless `--no-deslop` retained pre-deslop evidence
      - final closeout artifacts are internally consistent
    - On approval:
      - `state_write({mode: "oh-my-ralpha", active: false, current_phase: "complete", completed_at: "<now>"})`
@@ -164,26 +172,39 @@ Oh My Ralpha is Ralph with that specialization baked in.
 
 <Tool_Usage>
 - Use read-only exploration first: search, inspect, map touchpoints
-- Use OMX state tools as the execution spine:
+- Use oh-my-ralpha state tools as the execution spine:
   - `state_read(mode="oh-my-ralpha")` on resume
   - `state_write(...)` on start / slice transition / verify / complete
   - `state_clear(mode="oh-my-ralpha")` on final cleanup
 - Use `trace` and the rounds ledger together when reconstructing the last stop point
-- Use `architect` for stage guarantees and final architecture closeout
-- Use `code-reviewer` for final quality closeout
-- Use `team-executor` as the default main implementation lane for substantive slice work
-- Use `code-simplifier` only after correctness is proven
+- Use `architect`, `code-reviewer`, and `code-simplifier` as spawned native subagents for the per-slice acceptance bundle
+- Use `ai-slop-cleaner` only once at final closeout, after all slices are accepted
 - Prefer targeted pytest/build/typecheck commands before broad suite runs
 </Tool_Usage>
 
+<Stop_Hook_Scope>
+The native `Stop` hook is a cleanup guard, not a verification lane.
+
+- It blocks while `oh-my-ralpha` mode state is still `active: true`
+- It reminds the agent to finish verification and cleanup before stopping
+- It does not replace per-slice fresh evidence, `architect` / `code-reviewer` / `code-simplifier` slice acceptance, the final deslop pass, or post-deslop regression
+- It allows an explicit pause only when state remains `active: true`, `current_phase: "paused"`, and resume state includes `state.next_todo` or `state.current_slice`
+- It blocks inactive non-terminal pseudo-pauses such as `active: false` with `current_phase: "paused_after_*"`
+- Clear the active mode state only after those gates are recorded in the workboard and rounds ledger
+</Stop_Hook_Scope>
+
 <Standalone_Runtime>
-When full OMX runtime tooling is unavailable, use the built-in JS runtime shipped in this repository:
+When external runtime tooling is unavailable, use the built-in JS runtime shipped in this repository:
 
 - `oh-my-ralpha init --task "<task>"`
 - `oh-my-ralpha state read --mode oh-my-ralpha`
 - `oh-my-ralpha state write --mode oh-my-ralpha --json '{"active":true}'`
 - `oh-my-ralpha state clear --mode oh-my-ralpha`
 - `oh-my-ralpha trace show`
+- `oh-my-ralpha workflow route --text "$ralpha update src/router.mjs with activation tests" --activate`
+- `oh-my-ralpha workflow init --task "<task>"`
+- `oh-my-ralpha workflow plan --task "<task>"`
+- `oh-my-ralpha workflow interview --task "<task>"`
 - `oh-my-ralpha route --text "$ralpha update src/router.mjs with activation tests" --activate`
 - `oh-my-ralpha plan scaffold --task "<task>"`
 - `oh-my-ralpha interview scaffold --task "<task>"`
@@ -192,27 +213,30 @@ When full OMX runtime tooling is unavailable, use the built-in JS runtime shippe
 - `oh-my-ralpha install`
 - `oh-my-ralpha setup --scope project --force`
 - `oh-my-ralpha uninstall --scope project`
-- `oh-my-ralpha log status --session <session-id>`
-- `oh-my-ralpha log show --session <session-id> --limit 20`
 
 If the launcher is not yet on `PATH`, run the same commands from the repository checkout via `node bin/oh-my-ralpha.js ...`.
 
-Companion skills such as `plan`, `deep-interview`, `visual-verdict`, `web-clone`, and `ai-slop-cleaner` should still be used when available. If they are not installed, `doctor` reports the fallback path:
+Bundled companions are installed by `setup` from this package, not fetched from an external OMX checkout:
 
-- `plan` -> built-in plan scaffold
-- `deep-interview` -> built-in interview scaffold
-- `visual-verdict` / `web-clone` / `ai-slop-cleaner` -> proceed in degraded mode and record the missing capability in rounds/trace before continuing
+- role prompts/native agents: `architect`, `code-reviewer`, `code-simplifier`
+- skills: `ai-slop-cleaner`
+
+If a companion is missing from the target Codex home, `doctor` reports the fallback path:
+
+- `architect` / `code-reviewer` / `code-simplifier` -> proceed with the leader's best grounded manual pass and record the missing capability in rounds/trace before continuing
+- `ai-slop-cleaner` -> proceed in degraded mode with a manual cleanup checklist and record the missing capability in rounds/trace before continuing
 - Native Codex integration is available through `setup`, which installs the skill, writes `.codex/config.toml`, and registers native hook wrappers in `.codex/hooks.json`
-- The same `setup` step now registers built-in MCP tool surfaces:
-  - `oh_my_ralpha_state`
-  - `oh_my_ralpha_trace`
-  - `oh_my_ralpha_runtime`
-- Typing `@LOG` in a prompt enables session logging for the current session; logs are written under `.codex/oh-my-ralpha/working-model/logs/session-logs/` and can be inspected with `oh-my-ralpha log show`
+- The same `setup` step now registers one built-in MCP server, `oh_my_ralpha`, with grouped tool surfaces:
+  - `ralpha_state`
+  - `ralpha_trace`
+  - `ralpha_workflow`
+  - `ralpha_admin`
+- Host collaboration mode switching is out of scope. oh-my-ralpha uses its own planning phase: create or refresh planning artifacts, avoid implementation, and wait for decision-complete artifacts plus an execution-specific prompt.
 </Standalone_Runtime>
 
 ## State Management
 
-Use existing OMX state tools for the skill lifecycle. This is the Ralph inheritance point that stays, even though the loop is specialized around workboard + rounds files.
+Use the built-in oh-my-ralpha state tools for the skill lifecycle. This is the Ralph inheritance point that stays, even though the loop is specialized around workboard + rounds files.
 
 - **On start**:
   `state_write({mode: "oh-my-ralpha", active: true, iteration: 1, max_iterations: 40, current_phase: "executing", started_at: "<now>", state: {context_snapshot_path: "<snapshot>", workboard_path: "<todo>", rounds_path: "<rounds>", current_slice: "<id>"}})`
@@ -220,6 +244,8 @@ Use existing OMX state tools for the skill lifecycle. This is the Ralph inherita
   `state_write({mode: "oh-my-ralpha", iteration: <current>, current_phase: "executing"})`
 - **On verification/fix transition**:
   `state_write({mode: "oh-my-ralpha", current_phase: "verifying"})` or `state_write({mode: "oh-my-ralpha", current_phase: "fixing"})`
+- **On explicit pause**:
+  `state_write({mode: "oh-my-ralpha", active: true, current_phase: "paused", pause_reason: "<reason>", state: {next_todo: "<id>", current_slice: "<id>"}})`
 - **On completion**:
   `state_write({mode: "oh-my-ralpha", active: false, current_phase: "complete", completed_at: "<now>"})`
 - **On cleanup**:
@@ -250,7 +276,7 @@ Why bad: That needs `autopilot`.
 
 <Bad>
 "I don't know what we should do yet."
-Why bad: That needs `plan`.
+Why bad: That needs ordinary planning or requirements discovery before oh-my-ralpha execution.
 </Bad>
 </Examples>
 
@@ -261,13 +287,12 @@ Why bad: That needs `plan`.
 - [ ] Large TODOs were decomposed into sub-TODOs before implementation
 - [ ] Exactly one slice was active at a time
 - [ ] Each completed slice has fresh evidence
+- [ ] Each completed slice passed `architect` / `code-reviewer` / `code-simplifier` acceptance
 - [ ] Broader regressions were run before final claim
-- [ ] Architect verification passed for the final milestone
-- [ ] Code-reviewer final closeout passed
-- [ ] `code-simplifier` ran on changed files (or `--no-deslop` explicitly skipped the simplification pass)
-- [ ] Post-simplification regression passed (or the latest successful pre-simplification verification evidence was retained because `--no-deslop` was specified)
+- [ ] Final `ai-slop-cleaner` ran on changed files (or `--no-deslop` explicitly skipped the deslop pass)
+- [ ] Post-deslop regression passed (or the latest successful pre-deslop verification evidence was retained because `--no-deslop` was specified)
 - [ ] Closeout artifacts agree on the final state
-- [ ] OMX state is marked complete and cleared
+- [ ] working-model state is marked complete and cleared
 </Final_Checklist>
 
 <Advanced>
@@ -279,5 +304,5 @@ When the prompt contains `--prd`, keep Ralph's PRD behavior:
 - continue using the workboard/rounds files as the execution truth source after PRD creation
 
 ### Detecting `--no-deslop`
-If the prompt contains `--no-deslop`, skip the simplification pass and use the latest successful pre-simplification verification evidence, while still syncing workboard/rounds state and any audit artifact.
+If the prompt contains `--no-deslop`, skip the final `ai-slop-cleaner` pass and use the latest successful pre-deslop verification evidence, while still syncing workboard/rounds state and any audit artifact.
 </Advanced>

@@ -4,9 +4,7 @@ import { installSkill } from './install.mjs';
 import { doctorReport, formatDoctorReport } from './doctor.mjs';
 import { initWorkspace } from './init.mjs';
 import { runNativeHookCli } from './native-hook.mjs';
-import { runNotifyCli } from './notify.mjs';
 import { scaffoldInterview, scaffoldPlan } from './planning.mjs';
-import { clearSessionLogState, disableSessionLog, readSessionLogEntries, readSessionLogState } from './session-log.mjs';
 import { appendTraceEvent, readTraceEvents } from './trace.mjs';
 import { clearModeState, readModeState, writeModeState } from './state.mjs';
 import { routePrompt } from './router.mjs';
@@ -99,10 +97,6 @@ export async function runCli(argv) {
       }
       return;
     }
-    case 'notify': {
-      await runNotifyCli(process.argv);
-      return;
-    }
     case 'verify': {
       const result = await verifyInstallation({
         runtimeRoot,
@@ -112,6 +106,55 @@ export async function runCli(argv) {
       });
       console.log(asJson(result));
       return;
+    }
+    case 'workflow': {
+      if (subcommand === 'route') {
+        const text = requiredOption(options, 'text');
+        const result = await routePrompt({
+          cwd,
+          text,
+          sessionId: options.session ? String(options.session) : undefined,
+          threadId: options.thread ? String(options.thread) : undefined,
+          turnId: options.turn ? String(options.turn) : undefined,
+          activate: Boolean(options.activate),
+        });
+        console.log(asJson(result));
+        return;
+      }
+      if (subcommand === 'init') {
+        const task = requiredOption(options, 'task');
+        const result = await initWorkspace({
+          cwd,
+          task,
+          slug: options.slug ? String(options.slug) : undefined,
+          overwrite: Boolean(options.overwrite),
+        });
+        console.log(asJson(result));
+        return;
+      }
+      if (subcommand === 'plan') {
+        const task = requiredOption(options, 'task');
+        const result = await scaffoldPlan({
+          cwd,
+          task,
+          slug: options.slug ? String(options.slug) : undefined,
+          overwrite: Boolean(options.overwrite),
+        });
+        console.log(asJson(result));
+        return;
+      }
+      if (subcommand === 'interview') {
+        const task = requiredOption(options, 'task');
+        const result = await scaffoldInterview({
+          cwd,
+          task,
+          slug: options.slug ? String(options.slug) : undefined,
+          overwrite: Boolean(options.overwrite),
+        });
+        console.log(asJson(result));
+        return;
+      }
+      throw new Error('usage: oh-my-ralpha workflow <route|init|plan|interview>');
     }
     case 'init': {
       const task = requiredOption(options, 'task');
@@ -181,35 +224,6 @@ export async function runCli(argv) {
       }
       throw new Error('usage: oh-my-ralpha trace <append|show>');
     }
-    case 'log': {
-      const sessionId = options.session ? String(options.session) : undefined;
-      const threadId = options.thread ? String(options.thread) : undefined;
-      if (subcommand === 'status') {
-        console.log(asJson(await readSessionLogState({ cwd, sessionId, threadId })));
-        return;
-      }
-      if (subcommand === 'show') {
-        const limit = options.limit ? Number.parseInt(String(options.limit), 10) : undefined;
-        console.log(asJson(await readSessionLogEntries({ cwd, sessionId, threadId, limit })));
-        return;
-      }
-      if (subcommand === 'disable') {
-        const result = await disableSessionLog({
-          cwd,
-          sessionId,
-          threadId,
-          turnId: options.turn ? String(options.turn) : undefined,
-          reason: options.reason ? String(options.reason) : 'cli-disable',
-        });
-        console.log(asJson(result));
-        return;
-      }
-      if (subcommand === 'clear-state') {
-        console.log(asJson({ cleared: await clearSessionLogState({ cwd, sessionId, threadId }) }));
-        return;
-      }
-      throw new Error('usage: oh-my-ralpha log <status|show|disable|clear-state>');
-    }
     case 'route': {
       const text = requiredOption(options, 'text');
       const result = await routePrompt({
@@ -237,7 +251,7 @@ export async function runCli(argv) {
     }
     default:
       throw new Error(
-        'usage: oh-my-ralpha <install|setup|uninstall|doctor|notify|verify|init|plan scaffold|interview scaffold|state|trace|log|route|hook native>',
+        'usage: oh-my-ralpha <install|setup|uninstall|doctor|verify|workflow|init|plan scaffold|interview scaffold|state|trace|route|hook native>',
       );
   }
 }

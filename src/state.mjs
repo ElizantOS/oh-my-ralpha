@@ -1,7 +1,7 @@
 import { rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { omxStateDir } from './paths.mjs';
+import { workingModelStateDir } from './paths.mjs';
 import { deepMerge, readJsonIfExists, writeJson } from './json-file.mjs';
 
 function normalizeMode(mode) {
@@ -13,7 +13,7 @@ function normalizeMode(mode) {
 
 export function getModeStatePath(cwd, mode, sessionId) {
   const normalizedMode = normalizeMode(mode);
-  const base = omxStateDir(cwd);
+  const base = workingModelStateDir(cwd);
   if (sessionId) {
     return join(base, 'sessions', sessionId, `${normalizedMode}-state.json`);
   }
