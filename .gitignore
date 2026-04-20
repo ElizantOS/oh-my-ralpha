@@ -1,4 +1,8 @@
 node_modules/
+npm-debug.log
+.DS_Store
+.omx/
+docker/ubuntu-codex/.cache/
 
 .codex/*
 !.codex/oh-my-ralpha/
