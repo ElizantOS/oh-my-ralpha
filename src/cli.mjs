@@ -154,7 +154,7 @@ export async function runCli(argv) {
         console.log(asJson(result));
         return;
       }
-      throw new Error('usage: oh-my-ralpha workflow <route|init|plan|interview>');
+      throw new Error('usage: ralpha workflow <route|init|plan|interview>');
     }
     case 'init': {
       const task = requiredOption(options, 'task');
@@ -168,7 +168,7 @@ export async function runCli(argv) {
       return;
     }
     case 'plan': {
-      if (subcommand !== 'scaffold') throw new Error('usage: oh-my-ralpha plan scaffold --task "<task>"');
+      if (subcommand !== 'scaffold') throw new Error('usage: ralpha plan scaffold --task "<task>"');
       const task = requiredOption(options, 'task');
       const result = await scaffoldPlan({
         cwd,
@@ -180,7 +180,7 @@ export async function runCli(argv) {
       return;
     }
     case 'interview': {
-      if (subcommand !== 'scaffold') throw new Error('usage: oh-my-ralpha interview scaffold --task "<task>"');
+      if (subcommand !== 'scaffold') throw new Error('usage: ralpha interview scaffold --task "<task>"');
       const task = requiredOption(options, 'task');
       const result = await scaffoldInterview({
         cwd,
@@ -208,7 +208,7 @@ export async function runCli(argv) {
         console.log(asJson({ cleared: await clearModeState({ cwd, mode, sessionId }) }));
         return;
       }
-      throw new Error('usage: oh-my-ralpha state <read|write|clear> --mode <name>');
+      throw new Error('usage: ralpha state <read|write|clear> --mode <name>');
     }
     case 'trace': {
       if (subcommand === 'append') {
@@ -222,7 +222,7 @@ export async function runCli(argv) {
         console.log(asJson(await readTraceEvents({ cwd, limit })));
         return;
       }
-      throw new Error('usage: oh-my-ralpha trace <append|show>');
+      throw new Error('usage: ralpha trace <append|show>');
     }
     case 'route': {
       const text = requiredOption(options, 'text');

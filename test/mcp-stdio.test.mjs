@@ -126,7 +126,7 @@ describe('oh-my-ralpha MCP stdio servers', () => {
       2,
     );
 
-    assert.equal(responses[0].result.serverInfo.name, 'oh-my-ralpha');
+    assert.equal(responses[0].result.serverInfo.name, 'ralpha');
     const toolNames = responses[1].result.tools.map((tool) => tool.name);
     assert.deepEqual(toolNames, [
       'ralpha_state',

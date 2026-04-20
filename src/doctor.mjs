@@ -25,19 +25,18 @@ export function doctorReport({ runtimeRoot, codexHome, cwd = process.cwd(), scop
     installedSkill: existsSync(installedSkillPath),
     launcher: existsSync(launcherPath),
     codexBinOnPath: (process.env.PATH || '').split(':').includes(codexBinPath),
-    mcpConfigured: /\[mcp_servers\.oh_my_ralpha\]/.test(configContent),
-    legacyMcpConfigured: /\[mcp_servers\.oh_my_ralpha_(?:state|trace|runtime)\]/.test(configContent),
+    mcpConfigured: /\[mcp_servers\.ralpha\]/.test(configContent),
   };
   const suggestions = [];
 
   if (!checks.installedSkill || !checks.launcher) {
-    suggestions.push(`Run "oh-my-ralpha setup --scope ${scope}" or "node bin/oh-my-ralpha.js setup --scope ${scope}" to install the runtime surface.`);
+    suggestions.push(`Run "ralpha setup --scope ${scope}" or "node bin/oh-my-ralpha.js setup --scope ${scope}" to install the runtime surface.`);
   }
   if (!checks.codexBinOnPath) {
     suggestions.push(`Add ${codexBinPath} to PATH, or keep using "node ${join(runtimeRoot, 'bin', 'oh-my-ralpha.js')}" directly.`);
   }
-  if (!checks.mcpConfigured || checks.legacyMcpConfigured) {
-    suggestions.push(`Re-run "oh-my-ralpha setup --scope ${scope} --force" to restore MCP server configuration.`);
+  if (!checks.mcpConfigured) {
+    suggestions.push(`Re-run "ralpha setup --scope ${scope} --force" to restore MCP server configuration.`);
   }
 
   return {

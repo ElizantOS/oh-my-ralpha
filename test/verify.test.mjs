@@ -35,6 +35,5 @@ describe('oh-my-ralpha verify command surface', () => {
     assert.ok(checkNames.includes('native_hook_prompt_submit'));
     assert.ok(checkNames.includes('mcp_handshake'));
     assert.equal(result.doctor.checks.mcpConfigured, true);
-    assert.equal(result.doctor.checks.legacyMcpConfigured, false);
   });
 });

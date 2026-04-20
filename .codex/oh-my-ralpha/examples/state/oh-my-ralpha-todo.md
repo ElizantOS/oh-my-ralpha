@@ -22,7 +22,7 @@
 - `status`: completed
 - `implementation overview`: Extend routing, keyword registry, stateful skill seeding, heavy-mode detection, and execution gate logic so `oh-my-ralpha` behaves as a first-class Ralph-class execution workflow.
 - `acceptance`: Triggering and state behavior are on par with other heavy workflows.
-- `evidence`: This package includes trigger coverage for `oh-my-ralpha`, `ralpha`, `继续推进`, `继续完成`, `继续处理`, `keep moving`, `finish the remaining work`, and `收掉 todo`, plus the seeded state defaults of `iteration: 1` and `max_iterations: 40`.
+- `evidence`: This package includes trigger coverage for the canonical `$ralpha` command, rejects `$oh-my-ralpha` as a compatibility alias, rejects natural-language continuation without explicit `$ralpha` intent, and keeps seeded state defaults of `iteration: 1` and `max_iterations: 40`.
 
 ## `R-04`
 - `title`: Add team-lane, sub-TODO decomposition, and done-gate contracts
@@ -38,7 +38,7 @@
 - `status`: completed
 - `implementation overview`: Extend tests beyond frontmatter/keyword detection to lock Ralph inheritance, workboard/rounds usage, plan-first gating, and final done-gate semantics.
 - `acceptance`: Tests fail if `oh-my-ralpha` drifts away from Ralph-full plus `.codex/oh-my-ralpha` workflow semantics.
-- `evidence`: This standalone repo carries Node tests for trigger aliases, skill contract clauses, and the sample `.codex/oh-my-ralpha` truth-source artifacts.
+- `evidence`: This standalone repo carries Node tests for the canonical trigger contract, skill contract clauses, and the sample `.codex/oh-my-ralpha` truth-source artifacts.
 
 ## `R-06`
 - `title`: Final review and package-readiness closeout

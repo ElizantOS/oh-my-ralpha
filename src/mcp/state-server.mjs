@@ -4,12 +4,12 @@ import { realpathSync } from 'node:fs';
 import { readModeState, writeModeState, clearModeState } from '../state.mjs';
 
 const server = createMcpServer({
-  name: 'oh-my-ralpha-state',
+  name: 'ralpha-state',
   version: '0.1.0',
   tools: [
     createTool(
       'state_read',
-      'Read oh-my-ralpha mode state',
+      'Read ralpha mode state',
       {
         type: 'object',
         properties: {
@@ -30,7 +30,7 @@ const server = createMcpServer({
     ),
     createTool(
       'state_write',
-      'Write or merge oh-my-ralpha mode state',
+      'Write or merge ralpha mode state',
       {
         type: 'object',
         properties: {
@@ -55,7 +55,7 @@ const server = createMcpServer({
     ),
     createTool(
       'state_clear',
-      'Clear oh-my-ralpha mode state',
+      'Clear ralpha mode state',
       {
         type: 'object',
         properties: {
@@ -90,7 +90,7 @@ function isMainModule() {
 
 if (isMainModule()) {
   await server.start().catch((error) => {
-    process.stderr.write(`[oh-my-ralpha-state-server] ${error instanceof Error ? error.message : String(error)}\n`);
+    process.stderr.write(`[ralpha-state-server] ${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;
   });
 }

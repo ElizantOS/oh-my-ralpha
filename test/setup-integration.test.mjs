@@ -33,10 +33,7 @@ describe('oh-my-ralpha setup integration', () => {
     assert.equal(existsSync(result.targetSkillDir), true);
     assert.match(config, /codex_hooks = true/);
     assert.doesNotMatch(config, /^notify = \["node", ".*oh-my-ralpha\.js", "notify"\]$/m);
-    assert.match(config, /\[mcp_servers\.oh_my_ralpha\]/);
-    assert.doesNotMatch(config, /\[mcp_servers\.oh_my_ralpha_state\]/);
-    assert.doesNotMatch(config, /\[mcp_servers\.oh_my_ralpha_trace\]/);
-    assert.doesNotMatch(config, /\[mcp_servers\.oh_my_ralpha_runtime\]/);
+    assert.match(config, /\[mcp_servers\.ralpha\]/);
     assert.ok(hooks.hooks.SessionStart);
     assert.equal(hooks.hooks.PreToolUse, undefined);
     assert.equal(hooks.hooks.PostToolUse, undefined);
@@ -72,12 +69,9 @@ describe('oh-my-ralpha setup integration', () => {
     assert.ok(!sessionHooks.some((hook) => typeof hook.command === 'string' && hook.command.includes('oh-my-ralpha.js" hook native')));
     assert.match(nextConfig, /codex_hooks = true/);
     assert.doesNotMatch(nextConfig, /^notify = \["node", ".*oh-my-ralpha\.js", "notify"\]$/m);
-    assert.doesNotMatch(nextConfig, /\[mcp_servers\.oh_my_ralpha\]/);
-    assert.doesNotMatch(nextConfig, /\[mcp_servers\.oh_my_ralpha_state\]/);
-    assert.doesNotMatch(nextConfig, /\[mcp_servers\.oh_my_ralpha_trace\]/);
-    assert.doesNotMatch(nextConfig, /\[mcp_servers\.oh_my_ralpha_runtime\]/);
-    assert.equal(existsSync(join(codexHome, 'skills', 'oh-my-ralpha')), false);
-    assert.equal(existsSync(join(codexHome, 'bin', 'oh-my-ralpha')), false);
+    assert.doesNotMatch(nextConfig, /\[mcp_servers\.ralpha\]/);
+    assert.equal(existsSync(join(codexHome, 'skills', 'ralpha')), false);
+    assert.equal(existsSync(join(codexHome, 'bin', 'ralpha')), false);
   });
 
   it('fails loudly when hooks.json is invalid instead of overwriting it', async () => {
@@ -101,8 +95,8 @@ describe('oh-my-ralpha setup integration', () => {
       /invalid hooks\.json/i,
     );
 
-    assert.equal(existsSync(join(codexHome, 'skills', 'oh-my-ralpha')), false);
-    assert.equal(existsSync(join(codexHome, 'bin', 'oh-my-ralpha')), false);
+    assert.equal(existsSync(join(codexHome, 'skills', 'ralpha')), false);
+    assert.equal(existsSync(join(codexHome, 'bin', 'ralpha')), false);
     assert.equal(existsSync(join(codexHome, 'config.toml')), false);
   });
 
@@ -129,44 +123,6 @@ describe('oh-my-ralpha setup integration', () => {
     assert.equal(existsSync(result.targetSkillDir), true);
     assert.match(config, /^notify = \["node", "\/tmp\/custom-notify\.js"\]$/m);
     assert.equal(existsSync(join(result.targetSkillDir, 'notify-chain.json')), false);
-  });
-
-  it('replaces stale split MCP registrations with the unified MCP server', async () => {
-    const cwd = await makeTempWorkspace('oh-my-ralpha-stale-mcp-');
-    const codexHome = await makeTempWorkspace('oh-my-ralpha-codex-home-');
-    const runtimeRoot = runtimeRootFromModule(import.meta.url);
-    await import('node:fs/promises').then(({ mkdir, writeFile }) =>
-      mkdir(codexHome, { recursive: true }).then(() =>
-        writeFile(join(codexHome, 'config.toml'), [
-          '[mcp_servers.oh_my_ralpha_state]',
-          'command = "node"',
-          'args = ["/tmp/state-server.mjs"]',
-          '',
-          '[mcp_servers.oh_my_ralpha_trace]',
-          'command = "node"',
-          'args = ["/tmp/trace-server.mjs"]',
-          '',
-          '[mcp_servers.oh_my_ralpha_runtime]',
-          'command = "node"',
-          'args = ["/tmp/runtime-server.mjs"]',
-          '',
-        ].join('\n'), 'utf-8'),
-      ),
-    );
-
-    await setupCodexIntegration({
-      cwd,
-      runtimeRoot,
-      codexHome,
-      scope: 'user',
-      force: true,
-    });
-
-    const config = await readFile(join(codexHome, 'config.toml'), 'utf-8');
-    assert.match(config, /\[mcp_servers\.oh_my_ralpha\]/);
-    assert.doesNotMatch(config, /\[mcp_servers\.oh_my_ralpha_state\]/);
-    assert.doesNotMatch(config, /\[mcp_servers\.oh_my_ralpha_trace\]/);
-    assert.doesNotMatch(config, /\[mcp_servers\.oh_my_ralpha_runtime\]/);
   });
 
   it('installs bundled companion prompts, native agents, and skills', async () => {
@@ -272,11 +228,44 @@ describe('oh-my-ralpha setup integration', () => {
     assert.equal(output.continue, undefined);
   });
 
+  it('injects the interruption protocol for active ralpha work without $ralpha', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-active-interrupt-');
+    await writeModeState({
+      cwd,
+      mode: 'ralpha',
+      sessionId: 'sess-interrupt',
+      patch: {
+        active: true,
+        current_phase: 'executing',
+        state: {
+          current_slice: 'P0-04',
+          next_todo: 'P0-04',
+        },
+      },
+    });
+
+    const output = await dispatchNativeHook({
+      hook_event_name: 'UserPromptSubmit',
+      cwd,
+      session_id: 'sess-interrupt',
+      prompt: 'also make the JSON failure path deterministic',
+    });
+
+    assert.equal(output.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
+    assert.match(output.hookSpecificOutput.additionalContext, /already active/i);
+    assert.match(output.hookSpecificOutput.additionalContext, /User Interruption Protocol/i);
+    assert.match(output.hookSpecificOutput.additionalContext, /current-slice correction/i);
+    assert.match(output.hookSpecificOutput.additionalContext, /INT-\*/);
+    assert.match(output.hookSpecificOutput.additionalContext, /return_to:P0-04/);
+    assert.match(output.hookSpecificOutput.additionalContext, /workboard and rounds ledger/i);
+    assert.match(output.hookSpecificOutput.additionalContext, /Do not use current_phase:"paused"/i);
+  });
+
   it('blocks Stop for session-scoped active state without claiming verification', async () => {
     const cwd = await makeTempWorkspace('oh-my-ralpha-stop-hook-');
     await writeModeState({
       cwd,
-      mode: 'oh-my-ralpha',
+      mode: 'ralpha',
       sessionId: 'sess-stop',
       patch: {
         active: true,
@@ -300,7 +289,7 @@ describe('oh-my-ralpha setup integration', () => {
 
     await writeModeState({
       cwd,
-      mode: 'oh-my-ralpha',
+      mode: 'ralpha',
       sessionId: 'sess-stop',
       patch: {
         active: false,
@@ -316,11 +305,11 @@ describe('oh-my-ralpha setup integration', () => {
     assert.equal(allowed, null);
   });
 
-  it('allows Stop for explicit paused state with resume target', async () => {
+  it('blocks paused state even with resume target', async () => {
     const cwd = await makeTempWorkspace('oh-my-ralpha-stop-paused-');
     await writeModeState({
       cwd,
-      mode: 'oh-my-ralpha',
+      mode: 'ralpha',
       sessionId: 'sess-paused',
       patch: {
         active: true,
@@ -339,18 +328,68 @@ describe('oh-my-ralpha setup integration', () => {
       session_id: 'sess-paused',
     });
 
-    assert.equal(output.decision, undefined);
-    assert.equal(output.hookSpecificOutput.hookEventName, 'Stop');
-    assert.match(output.hookSpecificOutput.additionalContext, /paused and resumable/i);
-    assert.match(output.hookSpecificOutput.additionalContext, /resume_target: P0-04/);
-    assert.match(output.hookSpecificOutput.additionalContext, /pause_reason: user_requested_pause/);
+    assert.equal(output.decision, 'block');
+    assert.match(output.reason, /paused is resumable metadata/i);
+    assert.match(output.reason, /not permission to stop/i);
+    assert.match(output.reason, /Resume target is P0-04/);
+  });
+
+  it('allows awaiting_user state with resume target and reason', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-awaiting-user-');
+    await writeModeState({
+      cwd,
+      mode: 'ralpha',
+      sessionId: 'sess-awaiting-user',
+      patch: {
+        active: true,
+        current_phase: 'awaiting_user',
+        state: {
+          next_todo: 'P0-04',
+          current_slice: 'P0-04',
+          awaiting_user_reason: 'waiting for queued user insertion',
+        },
+      },
+    });
+
+    const output = await dispatchNativeHook({
+      hook_event_name: 'Stop',
+      cwd,
+      session_id: 'sess-awaiting-user',
+    });
+
+    assert.equal(output, null);
+  });
+
+  it('blocks awaiting_user state without resume reason', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-awaiting-user-missing-reason-');
+    await writeModeState({
+      cwd,
+      mode: 'ralpha',
+      patch: {
+        active: true,
+        current_phase: 'awaiting_user',
+        state: {
+          next_todo: 'P0-04',
+          current_slice: 'P0-04',
+        },
+      },
+    });
+
+    const blocked = await dispatchNativeHook({
+      hook_event_name: 'Stop',
+      cwd,
+    });
+
+    assert.equal(blocked.decision, 'block');
+    assert.match(blocked.reason, /awaiting user input/i);
+    assert.match(blocked.reason, /awaiting_user_reason/i);
   });
 
   it('blocks paused state without resume target', async () => {
     const cwd = await makeTempWorkspace('oh-my-ralpha-stop-paused-missing-resume-');
     await writeModeState({
       cwd,
-      mode: 'oh-my-ralpha',
+      mode: 'ralpha',
       patch: {
         active: true,
         current_phase: 'paused',
@@ -364,15 +403,41 @@ describe('oh-my-ralpha setup integration', () => {
     });
 
     assert.equal(blocked.decision, 'block');
-    assert.match(blocked.reason, /missing resume state/i);
+    assert.match(blocked.reason, /paused is resumable metadata/i);
     assert.match(blocked.reason, /state\.next_todo/i);
+  });
+
+  it('blocks blocker-paused state even with resume target', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-paused-blocker-');
+    await writeModeState({
+      cwd,
+      mode: 'ralpha',
+      patch: {
+        active: true,
+        current_phase: 'paused',
+        pause_reason: 'native_architect_acceptance_timeout',
+        state: {
+          next_todo: 'P0-04',
+          current_slice: 'P0-04',
+        },
+      },
+    });
+
+    const blocked = await dispatchNativeHook({
+      hook_event_name: 'Stop',
+      cwd,
+    });
+
+    assert.equal(blocked.decision, 'block');
+    assert.match(blocked.reason, /paused is resumable metadata/i);
+    assert.match(blocked.reason, /Continue, fix the blocker/i);
   });
 
   it('blocks inactive non-terminal pseudo-pauses', async () => {
     const cwd = await makeTempWorkspace('oh-my-ralpha-stop-pseudo-pause-');
     await writeModeState({
       cwd,
-      mode: 'oh-my-ralpha',
+      mode: 'ralpha',
       patch: {
         active: false,
         current_phase: 'paused_after_P0-03',
@@ -413,6 +478,5 @@ describe('oh-my-ralpha setup integration', () => {
     assert.match(report.codexHome, /\.codex$/);
     assert.equal(report.scope, 'project');
     assert.equal(report.checks.mcpConfigured, true);
-    assert.equal(report.checks.legacyMcpConfigured, false);
   });
 });

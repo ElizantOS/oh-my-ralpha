@@ -8,11 +8,11 @@ import {
   OBSOLETE_COMPANION_SKILLS,
 } from './companions.mjs';
 import { installSkill } from './install.mjs';
-import { installedAgentsDir, installedPromptsDir, installedSkillDir, resolveCodexHome } from './paths.mjs';
+import { installedAgentsDir, installedLauncherPath, installedPromptsDir, installedSkillDir, resolveCodexHome } from './paths.mjs';
 
 const MANAGED_HOOK_MARKER = 'oh-my-ralpha.js" hook native';
-const MANAGED_MCP_START = '# BEGIN OH_MY_RALPHA MCP BLOCK';
-const MANAGED_MCP_END = '# END OH_MY_RALPHA MCP BLOCK';
+const MANAGED_MCP_START = '# BEGIN RALPHA MCP BLOCK';
+const MANAGED_MCP_END = '# END RALPHA MCP BLOCK';
 const NOTIFY_CHAIN_FILE = 'notify-chain.json';
 const BUNDLED_COMPANION_SKILL_FILE = 'SKILL.bundle.md';
 
@@ -180,7 +180,7 @@ function managedMcpBlock(installedSkillDir) {
 
   return [
     MANAGED_MCP_START,
-    '[mcp_servers.oh_my_ralpha]',
+    '[mcp_servers.ralpha]',
     'command = "node"',
     `args = ["${serverPath}"]`,
     'enabled = true',
@@ -276,10 +276,7 @@ async function writeManagedMcpConfig(codexHome, installedSkillDir) {
   const path = codexConfigPath(codexHome);
   const existing = existsSync(path) ? await readFile(path, 'utf-8') : '';
   const stripped = stripMcpServerTables(stripManagedMcpBlock(existing), [
-    'oh_my_ralpha',
-    'oh_my_ralpha_state',
-    'oh_my_ralpha_trace',
-    'oh_my_ralpha_runtime',
+    'ralpha',
   ]);
   const next = [stripped, managedMcpBlock(installedSkillDir)].filter(Boolean).join('\n\n') + '\n';
   await mkdir(codexHome, { recursive: true });
@@ -292,10 +289,10 @@ function buildManagedHooks(installedCliPath) {
   return {
     SessionStart: [{
       matcher: 'startup|resume',
-      hooks: [{ type: 'command', command, statusMessage: 'Loading oh-my-ralpha session context' }],
+      hooks: [{ type: 'command', command, statusMessage: 'Loading ralpha session context' }],
     }],
     UserPromptSubmit: [{
-      hooks: [{ type: 'command', command, statusMessage: 'Applying oh-my-ralpha prompt routing' }],
+      hooks: [{ type: 'command', command, statusMessage: 'Applying ralpha prompt routing' }],
     }],
     Stop: [{
       hooks: [{ type: 'command', command, timeout: 30 }],
@@ -310,7 +307,7 @@ function parseHooksConfig(content) {
     const hooks = parsed.hooks && typeof parsed.hooks === 'object' ? parsed.hooks : {};
     return { ...parsed, hooks };
   } catch {
-    throw new Error('invalid hooks.json: expected valid JSON before oh-my-ralpha can merge managed hooks');
+    throw new Error('invalid hooks.json: expected valid JSON before ralpha can merge managed hooks');
   }
 }
 
@@ -362,10 +359,7 @@ async function removeManagedConfig(codexHome, installedSkillDir, { keepCodexHook
   const notifyChain = await readNotifyChain(installedSkillDir);
   const withoutNotify = removeManagedNotifyLine(existing);
   const withoutMcp = stripMcpServerTables(stripManagedMcpBlock(withoutNotify), [
-    'oh_my_ralpha',
-    'oh_my_ralpha_state',
-    'oh_my_ralpha_trace',
-    'oh_my_ralpha_runtime',
+    'ralpha',
   ]);
   const maybeRestoredNotify = restoreNotifyLine(withoutMcp, notifyChain);
   const stripped = (keepCodexHooks ? maybeRestoredNotify : removeCodexHooksFlag(maybeRestoredNotify)).trim();
@@ -450,8 +444,8 @@ export async function uninstallCodexIntegration({
   scope = 'user',
 }) {
   const targetCodexHome = resolveScopedCodexHome({ cwd, codexHome, scope });
-  const skillDir = join(targetCodexHome, 'skills', 'oh-my-ralpha');
-  const launcherPath = join(targetCodexHome, 'bin', 'oh-my-ralpha');
+  const skillDir = installedSkillDir(targetCodexHome);
+  const launcherPath = installedLauncherPath(targetCodexHome);
   const hooksResult = await removeManagedHooks(targetCodexHome);
   const configPath = await removeManagedConfig(targetCodexHome, skillDir, {
     keepCodexHooks: hooksResult.hooksRemain,

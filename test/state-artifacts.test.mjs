@@ -38,6 +38,7 @@ describe('oh-my-ralpha truth-source examples', () => {
     assert.deepEqual(roundsLedger.remaining_todos, []);
     assert.match(roundsLedger.verification_evidence.skill_validation, /repo-skill-ok/);
     assert.match(roundsLedger.verification_evidence.runtime_assertions, /\$ralpha/);
-    assert.match(roundsLedger.verification_evidence.runtime_assertions, /继续处理/);
+    assert.match(roundsLedger.verification_evidence.runtime_assertions, /resolves to ralpha/);
+    assert.match(roundsLedger.verification_evidence.runtime_assertions, /natural-language continuation phrases do not activate/);
   });
 });

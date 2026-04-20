@@ -11,12 +11,12 @@ import { runtimeRootFromModule } from '../paths.mjs';
 const runtimeRoot = runtimeRootFromModule(import.meta.url, 2);
 
 const server = createMcpServer({
-  name: 'oh-my-ralpha-runtime',
+  name: 'ralpha-runtime',
   version: '0.1.0',
   tools: [
     createTool(
       'doctor_report',
-      'Read oh-my-ralpha doctor status',
+      'Read ralpha doctor status',
       {
         type: 'object',
         properties: {
@@ -188,7 +188,7 @@ function isMainModule() {
 
 if (isMainModule()) {
   await server.start().catch((error) => {
-    process.stderr.write(`[oh-my-ralpha-runtime-server] ${error instanceof Error ? error.message : String(error)}\n`);
+    process.stderr.write(`[ralpha-runtime-server] ${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;
   });
 }

@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Standalone packaging surface for the oh-my-ralpha skill",
   "bin": {
-    "oh-my-ralpha": "./bin/oh-my-ralpha.js"
+    "ralpha": "./bin/oh-my-ralpha.js"
   },
   "scripts": {
     "test": "node --test",

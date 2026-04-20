@@ -10,7 +10,7 @@ import { getModeStatePath, readModeState, writeModeState, clearModeState } from 
 import { appendTraceEvent, getTracePath, readTraceEvents } from '../trace.mjs';
 import { setupCodexIntegration, uninstallCodexIntegration, resolveScopedCodexHome } from '../setup.mjs';
 import { verifyInstallation } from '../verify.mjs';
-import { runtimeRootFromModule } from '../paths.mjs';
+import { DEFAULT_SKILL_NAME, runtimeRootFromModule } from '../paths.mjs';
 
 const runtimeRoot = runtimeRootFromModule(import.meta.url, 2);
 
@@ -188,7 +188,7 @@ function ralphaTraceTool() {
 function ralphaWorkflowTool() {
   return createTool(
     'ralpha_workflow',
-    'Run one oh-my-ralpha workflow command. Use only for entering or shaping a ralpha task: route a prompt, initialize truth-source files, create PRD/test-spec scaffolds, or create interview scaffolds. Do not use for active state transitions, trace logging, setup, uninstall, verification, or doctor checks.',
+    'Run one ralpha workflow command. Use only for entering or shaping a ralpha task: route a prompt, initialize truth-source files, create PRD/test-spec scaffolds, or create interview scaffolds. Do not use for active state transitions, trace logging, setup, uninstall, verification, or doctor checks.',
     {
       type: 'object',
       properties: {
@@ -227,7 +227,7 @@ function ralphaWorkflowTool() {
           ok: true,
           command,
           result,
-          next: result.finalSkill === 'oh-my-ralpha'
+          next: result.finalSkill === 'ralpha'
             ? { instruction: 'Read the workboard and rounds files, then resume the active slice instead of restarting discovery.' }
             : { instruction: 'Complete the oh-my-ralpha planning artifacts before direct execution.' },
         };
@@ -298,8 +298,8 @@ function adminDryRunPaths({ cwd, codexHome, scope }) {
   return [
     join(resolvedCodexHome, 'config.toml'),
     join(resolvedCodexHome, 'hooks.json'),
-    join(resolvedCodexHome, 'skills', 'oh-my-ralpha'),
-    join(resolvedCodexHome, 'bin', 'oh-my-ralpha'),
+    join(resolvedCodexHome, 'skills', DEFAULT_SKILL_NAME),
+    join(resolvedCodexHome, 'bin', DEFAULT_SKILL_NAME),
   ];
 }
 
@@ -407,7 +407,7 @@ function ralphaAdminTool() {
 }
 
 const server = createMcpServer({
-  name: 'oh-my-ralpha',
+  name: 'ralpha',
   version: '0.1.0',
   tools: [
     ralphaStateTool(),
@@ -428,7 +428,7 @@ function isMainModule() {
 
 if (isMainModule()) {
   await server.start().catch((error) => {
-    process.stderr.write(`[oh-my-ralpha-server] ${error instanceof Error ? error.message : String(error)}\n`);
+    process.stderr.write(`[ralpha-server] ${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;
   });
 }

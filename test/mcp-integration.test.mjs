@@ -46,7 +46,7 @@ describe('oh-my-ralpha MCP integration', () => {
         arguments: {
           command: 'write',
           cwd,
-          mode: 'oh-my-ralpha',
+          mode: 'ralpha',
           patch: { active: true, current_phase: 'executing' },
         },
       },
@@ -61,7 +61,7 @@ describe('oh-my-ralpha MCP integration', () => {
         arguments: {
           command: 'read',
           cwd,
-          mode: 'oh-my-ralpha',
+          mode: 'ralpha',
         },
       },
     });
@@ -208,7 +208,7 @@ describe('oh-my-ralpha MCP integration', () => {
         name: 'state_write',
         arguments: {
           cwd,
-          mode: 'oh-my-ralpha',
+          mode: 'ralpha',
           patch: { active: true, current_phase: 'executing' },
         },
       },
@@ -222,7 +222,7 @@ describe('oh-my-ralpha MCP integration', () => {
         name: 'state_read',
         arguments: {
           cwd,
-          mode: 'oh-my-ralpha',
+          mode: 'ralpha',
         },
       },
     });

@@ -55,7 +55,7 @@ This skill is Ralph specialized for the workflow that actually worked during the
 
 4. **Stop protection is not verification**
    - The native Stop hook prevents an uncleared active workflow from ending silently.
-   - Explicit pauses stay `active: true` with `current_phase: "paused"` plus resume state.
+   - Pause metadata stays `active: true` and is never permission to stop.
    - Inactive non-terminal pseudo-pauses are blocked because they hide unfinished work.
    - Team-style verification still belongs to the loop: per-slice fresh evidence, architect/code-reviewer/code-simplifier slice acceptance, final deslop, and post-deslop regression.
 

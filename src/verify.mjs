@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { doctorReport } from './doctor.mjs';
 import { dispatchNativeHook } from './native-hook.mjs';
+import { installedSkillDir } from './paths.mjs';
 
 function encodeMessage(payload) {
   const body = Buffer.from(JSON.stringify(payload), 'utf-8');
@@ -93,7 +94,7 @@ export async function verifyInstallation({
   const hooksPath = join(report.codexHome, 'hooks.json');
   const configContent = existsSync(configPath) ? await readFile(configPath, 'utf-8') : '';
 
-  const installedCliPath = join(report.codexHome, 'skills', 'oh-my-ralpha', 'bin', 'oh-my-ralpha.js');
+  const installedCliPath = join(installedSkillDir(report.codexHome), 'bin', 'oh-my-ralpha.js');
   const check = async (name, fn) => {
     try {
       const detail = await fn();
@@ -129,7 +130,7 @@ export async function verifyInstallation({
       return output.hookSpecificOutput.additionalContext;
     }),
     check('mcp_handshake', async () => {
-      const scriptPath = findServerPath(configContent, 'oh_my_ralpha');
+      const scriptPath = findServerPath(configContent, 'ralpha');
       if (!scriptPath) throw new Error('unified server path missing from config');
       const responses = await mcpHandshake(scriptPath);
       if (responses.length < 2) throw new Error('unified server handshake incomplete');

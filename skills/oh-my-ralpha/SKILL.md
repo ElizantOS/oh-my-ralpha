@@ -1,5 +1,5 @@
 ---
-name: oh-my-ralpha
+name: ralpha
 description: Ralph-derived persistent execution loop with mandatory native-subagent slice acceptance centered on .codex working-model truth-source files
 ---
 
@@ -19,13 +19,13 @@ Oh My Ralpha is a Ralph-derived persistence workflow. It keeps Ralph's full usef
 <Use_When>
 - The task requires real completion, not best-effort progress
 - There is already a TODO ledger, audit list, or obvious remaining slices
-- The user says "继续推进", "继续完成", "收掉这些 TODO", "keep moving", "finish the remaining work", or "继续处理"
+- The user invokes `$ralpha` for continuation, completion, or remaining TODO work
 - The work needs to run for a long time without drifting or waiting for repeated "continue" nudges
-- The user invokes `$oh-my-ralpha`, `$ralpha`, or an oh-my-ralpha trigger and thereby requests this workflow's native-subagent slice acceptance contract
+- The user invokes `$ralpha` and thereby requests this workflow's native-subagent slice acceptance contract
 </Use_When>
 
 <Do_Not_Use_When>
-- The request is still vague or exploratory and does not invoke oh-my-ralpha -- use ordinary planning first
+- The request is still vague or exploratory and does not invoke `$ralpha` -- use ordinary planning first
 - The user wants a full autonomous pipeline -- use `autopilot`
 - The task is a tiny one-shot fix with one obvious proof command -- just do it directly
 - The user explicitly wants manual control over every subtask -- use `ultrawork` or direct delegation
@@ -53,8 +53,39 @@ Oh My Ralpha is Ralph with that specialization baked in.
 - Use `run_in_background: true` for long operations (builds, installs, full test suites)
 - Deliver the full implementation: no scope reduction, no partial completion, no deleting tests to make them pass
 - Before final completion: broad regressions, relevant typecheck/lint, slice acceptance evidence, final deslop, post-deslop regression, and final artifact sync
-- Treat oh-my-ralpha invocation as explicit user intent to use the required per-slice native subagents: `architect`, `code-reviewer`, and `code-simplifier`
+- Treat `$ralpha` invocation as explicit user intent to use the required per-slice native subagents: `architect`, `code-reviewer`, and `code-simplifier`
 </Execution_Policy>
+
+<User_Interruption_Protocol>
+When `ralpha` mode is active, later user messages are insertions into the active workflow even if they do not repeat `$ralpha`.
+
+Before acting, classify the insertion:
+
+1. **Current-slice correction**
+   - Use when the user is correcting requirements, acceptance criteria, files, tests, or behavior for the active slice.
+   - Fold the correction into the active slice.
+   - Update the workboard and rounds ledger.
+   - Continue the same slice.
+
+2. **Interrupt slice**
+   - Use when the user introduces bounded work that must happen before the current slice can finish.
+   - Create the next `INT-*` item in the workboard.
+   - Record `interrupts: <current_slice>` and `return_to: <current_slice>`.
+   - Set `state.current_slice` to the `INT-*` item while it is active.
+   - Complete the interrupt slice with evidence and required acceptance gates, then restore `state.current_slice` to `return_to`.
+
+3. **Independent side task**
+   - Use when the work is independent of the current slice.
+   - Delegate only when the task has a disjoint write scope and can run safely in parallel.
+   - If delegation is unavailable or unsafe, record it as `INT-*` or `BACKLOG-*` before continuing.
+
+4. **Backlog item**
+   - Use when the work is unrelated and not urgent.
+   - Record it as `BACKLOG-*` in the workboard and rounds ledger.
+   - Continue the current slice.
+
+Do not use `current_phase: "paused"` as a response to user insertions. Pause metadata is not permission to stop; keep `active: true`, update the ledgers, and keep moving.
+</User_Interruption_Protocol>
 
 <Steps>
 0. **Pre-context intake (required before execution loop starts)**:
@@ -98,8 +129,8 @@ Oh My Ralpha is Ralph with that specialization baked in.
      - spawn `architect`
      - spawn `code-reviewer`
      - spawn `code-simplifier`
-   - Acceptance prompts are role prompts, not workflow invocations; do not include explicit `$ralpha` / `$oh-my-ralpha` tokens in spawned acceptance prompts
-   - Plain references to the package/workflow name are safe in acceptance prompts because the router only treats bare `ralpha` / `oh-my-ralpha` as a workflow trigger when explicit workflow intent is present
+   - Acceptance prompts are role prompts, not workflow invocations; do not include explicit `$ralpha` tokens in spawned acceptance prompts
+   - Plain references to the package/workflow name are safe in acceptance prompts because the router only treats bare `ralpha` as a workflow trigger when explicit workflow intent is present
    - Run acceptance agents as soon as the slice has fresh proof; do not replace them with a manual pass unless native subagents are unavailable in the host runtime
 
 4. **Run long operations in background**:
@@ -121,7 +152,7 @@ Oh My Ralpha is Ralph with that specialization baked in.
 
 7. **Slice acceptance bundle**:
    - Spawn `architect`, `code-reviewer`, and `code-simplifier` for every completed slice
-   - Use role-scoped acceptance prompts such as "Review slice P0-01 for the workflow package"; do not prefix them with `$ralpha` or `$oh-my-ralpha`
+   - Use role-scoped acceptance prompts such as "Review slice P0-01 for the workflow package"; do not prefix them with `$ralpha`
    - Treat these as slice-level acceptance gates, not only final closeout gates
    - Do not mark a slice `completed` until all three acceptance agents have returned PASS/APPROVED or all reported issues have been fixed and re-verified
    - If `code-simplifier` changes files, re-run the narrow slice proof and any affected tests before moving on
@@ -139,7 +170,7 @@ Oh My Ralpha is Ralph with that specialization baked in.
      - blockers
      - verification evidence
      - remaining TODOs
-   - `state_write({mode: "oh-my-ralpha", iteration: <current>, current_phase: "executing", state: {current_slice: "<id>"}})`
+   - `state_write({mode: "ralpha", iteration: <current>, current_phase: "executing", state: {current_slice: "<id>"}})`
 
 9. **Final deslop pass**:
    - After all slices are accepted, run `ai-slop-cleaner` on all files changed during the session
@@ -164,18 +195,18 @@ Oh My Ralpha is Ralph with that specialization baked in.
      - post-deslop regression passed, unless `--no-deslop` retained pre-deslop evidence
      - final closeout artifacts are internally consistent
    - On approval:
-     - `state_write({mode: "oh-my-ralpha", active: false, current_phase: "complete", completed_at: "<now>"})`
-     - `state_clear({mode: "oh-my-ralpha"})`
+     - `state_write({mode: "ralpha", active: false, current_phase: "complete", completed_at: "<now>"})`
+     - `state_clear({mode: "ralpha"})`
    - On rejection:
      - fix the raised issues, re-verify, and continue from the current truth-source files
 </Steps>
 
 <Tool_Usage>
 - Use read-only exploration first: search, inspect, map touchpoints
-- Use oh-my-ralpha state tools as the execution spine:
-  - `state_read(mode="oh-my-ralpha")` on resume
+- Use ralpha state tools as the execution spine:
+  - `state_read(mode="ralpha")` on resume
   - `state_write(...)` on start / slice transition / verify / complete
-  - `state_clear(mode="oh-my-ralpha")` on final cleanup
+  - `state_clear(mode="ralpha")` on final cleanup
 - Use `trace` and the rounds ledger together when reconstructing the last stop point
 - Use `architect`, `code-reviewer`, and `code-simplifier` as spawned native subagents for the per-slice acceptance bundle
 - Use `ai-slop-cleaner` only once at final closeout, after all slices are accepted
@@ -185,10 +216,12 @@ Oh My Ralpha is Ralph with that specialization baked in.
 <Stop_Hook_Scope>
 The native `Stop` hook is a cleanup guard, not a verification lane.
 
-- It blocks while `oh-my-ralpha` mode state is still `active: true`
+- It blocks while `ralpha` mode state is still `active: true`
 - It reminds the agent to finish verification and cleanup before stopping
 - It does not replace per-slice fresh evidence, `architect` / `code-reviewer` / `code-simplifier` slice acceptance, the final deslop pass, or post-deslop regression
-- It allows an explicit pause only when state remains `active: true`, `current_phase: "paused"`, and resume state includes `state.next_todo` or `state.current_slice`
+- `current_phase: "awaiting_user"` is the only active non-terminal phase that may end a turn; it must include `state.next_todo` or `state.current_slice` plus `state.awaiting_user_reason` or `state.awaiting_user_prompt`
+- `current_phase: "paused"` is resumable metadata only; it is never permission to stop while `active: true`
+- Blocker states such as acceptance timeouts must continue, fix the blocker, use an approved degraded path, or ask the user before stopping
 - It blocks inactive non-terminal pseudo-pauses such as `active: false` with `current_phase: "paused_after_*"`
 - Clear the active mode state only after those gates are recorded in the workboard and rounds ledger
 </Stop_Hook_Scope>
@@ -196,23 +229,23 @@ The native `Stop` hook is a cleanup guard, not a verification lane.
 <Standalone_Runtime>
 When external runtime tooling is unavailable, use the built-in JS runtime shipped in this repository:
 
-- `oh-my-ralpha init --task "<task>"`
-- `oh-my-ralpha state read --mode oh-my-ralpha`
-- `oh-my-ralpha state write --mode oh-my-ralpha --json '{"active":true}'`
-- `oh-my-ralpha state clear --mode oh-my-ralpha`
-- `oh-my-ralpha trace show`
-- `oh-my-ralpha workflow route --text "$ralpha update src/router.mjs with activation tests" --activate`
-- `oh-my-ralpha workflow init --task "<task>"`
-- `oh-my-ralpha workflow plan --task "<task>"`
-- `oh-my-ralpha workflow interview --task "<task>"`
-- `oh-my-ralpha route --text "$ralpha update src/router.mjs with activation tests" --activate`
-- `oh-my-ralpha plan scaffold --task "<task>"`
-- `oh-my-ralpha interview scaffold --task "<task>"`
-- `oh-my-ralpha doctor`
-- `oh-my-ralpha verify --scope project`
-- `oh-my-ralpha install`
-- `oh-my-ralpha setup --scope project --force`
-- `oh-my-ralpha uninstall --scope project`
+- `ralpha init --task "<task>"`
+- `ralpha state read --mode ralpha`
+- `ralpha state write --mode ralpha --json '{"active":true}'`
+- `ralpha state clear --mode ralpha`
+- `ralpha trace show`
+- `ralpha workflow route --text "$ralpha update src/router.mjs with activation tests" --activate`
+- `ralpha workflow init --task "<task>"`
+- `ralpha workflow plan --task "<task>"`
+- `ralpha workflow interview --task "<task>"`
+- `ralpha route --text "$ralpha update src/router.mjs with activation tests" --activate`
+- `ralpha plan scaffold --task "<task>"`
+- `ralpha interview scaffold --task "<task>"`
+- `ralpha doctor`
+- `ralpha verify --scope project`
+- `ralpha install`
+- `ralpha setup --scope project --force`
+- `ralpha uninstall --scope project`
 
 If the launcher is not yet on `PATH`, run the same commands from the repository checkout via `node bin/oh-my-ralpha.js ...`.
 
@@ -226,7 +259,7 @@ If a companion is missing from the target Codex home, `doctor` reports the fallb
 - `architect` / `code-reviewer` / `code-simplifier` -> proceed with the leader's best grounded manual pass and record the missing capability in rounds/trace before continuing
 - `ai-slop-cleaner` -> proceed in degraded mode with a manual cleanup checklist and record the missing capability in rounds/trace before continuing
 - Native Codex integration is available through `setup`, which installs the skill, writes `.codex/config.toml`, and registers native hook wrappers in `.codex/hooks.json`
-- The same `setup` step now registers one built-in MCP server, `oh_my_ralpha`, with grouped tool surfaces:
+- The same `setup` step now registers one built-in MCP server, `ralpha`, with grouped tool surfaces:
   - `ralpha_state`
   - `ralpha_trace`
   - `ralpha_workflow`
@@ -236,20 +269,24 @@ If a companion is missing from the target Codex home, `doctor` reports the fallb
 
 ## State Management
 
-Use the built-in oh-my-ralpha state tools for the skill lifecycle. This is the Ralph inheritance point that stays, even though the loop is specialized around workboard + rounds files.
+Use the built-in ralpha state tools for the skill lifecycle. This is the Ralph inheritance point that stays, even though the loop is specialized around workboard + rounds files.
 
 - **On start**:
-  `state_write({mode: "oh-my-ralpha", active: true, iteration: 1, max_iterations: 40, current_phase: "executing", started_at: "<now>", state: {context_snapshot_path: "<snapshot>", workboard_path: "<todo>", rounds_path: "<rounds>", current_slice: "<id>"}})`
+  `state_write({mode: "ralpha", active: true, iteration: 1, max_iterations: 40, current_phase: "executing", started_at: "<now>", state: {context_snapshot_path: "<snapshot>", workboard_path: "<todo>", rounds_path: "<rounds>", current_slice: "<id>"}})`
 - **On each iteration**:
-  `state_write({mode: "oh-my-ralpha", iteration: <current>, current_phase: "executing"})`
+  `state_write({mode: "ralpha", iteration: <current>, current_phase: "executing"})`
 - **On verification/fix transition**:
-  `state_write({mode: "oh-my-ralpha", current_phase: "verifying"})` or `state_write({mode: "oh-my-ralpha", current_phase: "fixing"})`
-- **On explicit pause**:
-  `state_write({mode: "oh-my-ralpha", active: true, current_phase: "paused", pause_reason: "<reason>", state: {next_todo: "<id>", current_slice: "<id>"}})`
+  `state_write({mode: "ralpha", current_phase: "verifying"})` or `state_write({mode: "ralpha", current_phase: "fixing"})`
+- **On external interruption checkpoint**:
+  `state_write({mode: "ralpha", active: true, current_phase: "paused", pause_reason: "<reason>", state: {next_todo: "<id>", current_slice: "<id>"}})`
+  This preserves resume metadata only; it does not permit the Stop hook to end the turn while the mode is active.
+- **On waiting for the next user message**:
+  `state_write({mode: "ralpha", active: true, current_phase: "awaiting_user", state: {next_todo: "<id>", current_slice: "<id>", awaiting_user_reason: "<why input is needed>"}})`
+  This is the only active non-terminal state that may end a turn so queued user input can be processed.
 - **On completion**:
-  `state_write({mode: "oh-my-ralpha", active: false, current_phase: "complete", completed_at: "<now>"})`
+  `state_write({mode: "ralpha", active: false, current_phase: "complete", completed_at: "<now>"})`
 - **On cleanup**:
-  `state_clear({mode: "oh-my-ralpha"})`
+  `state_clear({mode: "ralpha"})`
 
 <Artifacts>
 - Context snapshot: `.codex/oh-my-ralpha/working-model/context/{task-slug}-{timestamp}.md`

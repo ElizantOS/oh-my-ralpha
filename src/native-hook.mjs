@@ -54,6 +54,40 @@ function readResumeTarget(state) {
   return '';
 }
 
+function readAwaitingUserReason(state) {
+  const nested = readNestedState(state);
+  for (const value of [
+    nested.awaiting_user_reason,
+    nested.awaiting_user_prompt,
+    nested.question,
+    state?.awaiting_user_reason,
+    state?.awaiting_user_prompt,
+    state?.question,
+  ]) {
+    const text = safeString(value).trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+async function readRalphaModeState(payload, cwd) {
+  const sessionId = readSessionId(payload);
+  if (sessionId) {
+    const sessionState = await readModeState({ cwd, mode: 'ralpha', sessionId });
+    if (sessionState) {
+      return {
+        state: sessionState,
+        scope: `session ${sessionId}`,
+      };
+    }
+  }
+
+  return {
+    state: await readModeState({ cwd, mode: 'ralpha' }),
+    scope: 'workspace',
+  };
+}
+
 function isTerminalPhase(phase) {
   return ['complete', 'failed', 'cancelled'].includes(phase);
 }
@@ -76,7 +110,7 @@ async function ensurePlanningArtifacts(cwd, task) {
 
 function planningContext(result, ensuredPlanning) {
   if (result.phase !== 'planning') {
-    return 'oh-my-ralpha detected. Read the existing .codex/oh-my-ralpha state/todo/rounds artifacts and continue from the active slice instead of restarting discovery.';
+    return 'ralpha detected. Read the existing .codex/oh-my-ralpha state/todo/rounds artifacts and continue from the active slice instead of restarting discovery.';
   }
 
   const artifacts = ensuredPlanning?.artifacts ?? result.planningArtifacts;
@@ -99,6 +133,20 @@ function planningContext(result, ensuredPlanning) {
   }
 
   return lines.join('\n');
+}
+
+function userInterruptionContext({ state, scope }) {
+  const current = readResumeTarget(state) || 'unknown';
+  return [
+    `ralpha is already active in ${scope}. Treat this user message as an insertion into the active workflow, even though it does not repeat $ralpha.`,
+    'User Interruption Protocol:',
+    '- First classify the insertion as one of: current-slice correction, interrupt slice, independent side task, or backlog item.',
+    '- Current-slice correction: fold it into the active slice, update the workboard and rounds ledger, then continue the same slice.',
+    `- Interrupt slice: create the next INT-* item in the workboard, set state.current_slice to that INT item, record interrupts:${current} and return_to:${current}, complete it with evidence, then return to ${current}.`,
+    '- Independent side task: delegate only if it has a disjoint write scope and can run safely in parallel; otherwise record it as INT-* or BACKLOG-* before continuing.',
+    '- Backlog item: record BACKLOG-* in the workboard and rounds ledger, then continue the current slice.',
+    '- Do not use current_phase:"paused" as a response to this insertion. Pause metadata is not permission to stop; keep active:true and keep moving.',
+  ].join('\n');
 }
 
 async function readStdinJson() {
@@ -144,6 +192,11 @@ async function buildPromptSubmitOutput(payload, cwd) {
       ? await ensurePlanningArtifacts(cwd, text)
       : null;
     messages.push(planningContext(result, ensuredPlanning));
+  } else {
+    const { state, scope } = await readRalphaModeState(payload, cwd);
+    if (state?.active === true) {
+      messages.push(userInterruptionContext({ state, scope }));
+    }
   }
 
   if (messages.length === 0) return null;
@@ -156,26 +209,8 @@ async function buildPromptSubmitOutput(payload, cwd) {
   };
 }
 
-async function readStopModeState(payload, cwd) {
-  const sessionId = readSessionId(payload);
-  if (sessionId) {
-    const sessionState = await readModeState({ cwd, mode: 'oh-my-ralpha', sessionId });
-    if (sessionState) {
-      return {
-        state: sessionState,
-        scope: `session ${sessionId}`,
-      };
-    }
-  }
-
-  return {
-    state: await readModeState({ cwd, mode: 'oh-my-ralpha' }),
-    scope: 'workspace',
-  };
-}
-
 async function buildStopOutput(payload, cwd) {
-  const { state, scope } = await readStopModeState(payload, cwd);
+  const { state, scope } = await readRalphaModeState(payload, cwd);
   const phase = normalizePhase(state?.current_phase);
 
   if (state?.active === false && phase && !isTerminalPhase(phase)) {
@@ -186,26 +221,38 @@ async function buildStopOutput(payload, cwd) {
   }
 
   if (state?.active === true) {
-    if (phase === 'paused') {
+    if (phase === 'awaiting_user') {
       const resumeTarget = readResumeTarget(state);
-      const pauseReason = safeString(state.pause_reason).trim() || 'unspecified';
+      const awaitingReason = readAwaitingUserReason(state);
       if (!resumeTarget) {
         return {
           decision: 'block',
-          reason: `oh-my-ralpha ${scope} mode is paused but missing resume state. Add state.next_todo or state.current_slice before stopping.`,
+          reason: `oh-my-ralpha ${scope} mode is awaiting user input but missing resume state. Add state.next_todo or state.current_slice before ending the turn.`,
         };
       }
+      if (!awaitingReason) {
+        return {
+          decision: 'block',
+          reason: `oh-my-ralpha ${scope} mode is awaiting user input for ${resumeTarget} but missing state.awaiting_user_reason or state.awaiting_user_prompt. Record why the next user message is needed before ending the turn.`,
+        };
+      }
+      return null;
+    }
+
+    if (phase === 'paused') {
+      const resumeTarget = readResumeTarget(state);
+      const resumeHint = resumeTarget
+        ? ` Resume target is ${resumeTarget}.`
+        : ' Add state.next_todo or state.current_slice before any external interruption so the task can resume cleanly.';
       return {
-        hookSpecificOutput: {
-          hookEventName: 'Stop',
-          additionalContext: `oh-my-ralpha ${scope} mode is paused and resumable. resume_target: ${resumeTarget}. pause_reason: ${pauseReason}.`,
-        },
+        decision: 'block',
+        reason: `oh-my-ralpha ${scope} mode is paused, but paused is resumable metadata, not permission to stop.${resumeHint} Continue, fix the blocker, use an approved degraded path, or mark the mode terminal only for an explicit cancel/complete decision.`,
       };
     }
 
     return {
       decision: 'block',
-      reason: `oh-my-ralpha ${scope} mode is still active (${phase || 'executing'}). Stop protection only prevents uncleared active state; it is not a substitute for fresh evidence, architect/code-reviewer/code-simplifier slice acceptance, final deslop, or post-deslop regression.`,
+      reason: `oh-my-ralpha ${scope} mode is still active (${phase || 'executing'}). Continue working. If the task truly needs the next user message, write current_phase:"awaiting_user" with state.next_todo or state.current_slice plus state.awaiting_user_reason before ending the turn. Stop protection is not a substitute for fresh evidence, architect/code-reviewer/code-simplifier slice acceptance, final deslop, or post-deslop regression.`,
     };
   }
   return null;

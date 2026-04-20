@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { detectOhMyRalpha, detectPrimaryKeyword, isUnderspecifiedForExecution } from './keywords.mjs';
+import { detectPrimaryKeyword, detectRalpha, isUnderspecifiedForExecution } from './keywords.mjs';
 import { readPlanningArtifacts } from './planning.mjs';
 import { writeJson } from './json-file.mjs';
 import { workingModelStateDir } from './paths.mjs';
@@ -51,10 +51,10 @@ export async function recordSkillActivation({
 
   await writeJson(getSkillActiveStatePath(cwd, sessionId), state);
 
-  if (match.skill === 'oh-my-ralpha' && phase === 'execution') {
+  if (match.skill === 'ralpha' && phase === 'execution') {
     await writeModeState({
       cwd,
-      mode: 'oh-my-ralpha',
+      mode: 'ralpha',
       sessionId,
       patch: {
         active: true,
@@ -91,7 +91,7 @@ export async function routePrompt({
   turnId,
   activate = false,
 }) {
-  const match = detectOhMyRalpha(text);
+  const match = detectRalpha(text);
   if (!match) {
     return {
       matched: false,
@@ -107,7 +107,7 @@ export async function routePrompt({
   const planningComplete = planningArtifacts.complete;
   const gateApplied = isUnderspecifiedForExecution(text);
   const phase = !gateApplied && planningComplete ? 'execution' : 'planning';
-  const finalSkill = phase === 'execution' ? 'oh-my-ralpha' : 'ralplan';
+  const finalSkill = phase === 'execution' ? 'ralpha' : 'ralplan';
 
   let activation = null;
   if (activate) {

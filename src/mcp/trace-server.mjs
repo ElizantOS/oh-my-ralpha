@@ -4,12 +4,12 @@ import { realpathSync } from 'node:fs';
 import { appendTraceEvent, readTraceEvents } from '../trace.mjs';
 
 const server = createMcpServer({
-  name: 'oh-my-ralpha-trace',
+  name: 'ralpha-trace',
   version: '0.1.0',
   tools: [
     createTool(
       'trace_show',
-      'Show oh-my-ralpha trace events',
+      'Show ralpha trace events',
       {
         type: 'object',
         properties: {
@@ -27,7 +27,7 @@ const server = createMcpServer({
     ),
     createTool(
       'trace_append',
-      'Append an oh-my-ralpha trace event',
+      'Append a ralpha trace event',
       {
         type: 'object',
         properties: {
@@ -60,7 +60,7 @@ function isMainModule() {
 
 if (isMainModule()) {
   await server.start().catch((error) => {
-    process.stderr.write(`[oh-my-ralpha-trace-server] ${error instanceof Error ? error.message : String(error)}\n`);
+    process.stderr.write(`[ralpha-trace-server] ${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;
   });
 }

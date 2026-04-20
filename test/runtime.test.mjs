@@ -138,20 +138,20 @@ describe('oh-my-ralpha standalone runtime', () => {
     const cwd = await makeTempWorkspace('oh-my-ralpha-state-');
     const written = await writeModeState({
       cwd,
-      mode: 'oh-my-ralpha',
+      mode: 'ralpha',
       patch: { active: true, current_phase: 'executing' },
     });
 
-    assert.equal(written.mode, 'oh-my-ralpha');
+    assert.equal(written.mode, 'ralpha');
     assert.equal(written.active, true);
 
-    const readBack = await readModeState({ cwd, mode: 'oh-my-ralpha' });
+    const readBack = await readModeState({ cwd, mode: 'ralpha' });
     assert.equal(readBack.active, true);
     assert.equal(readBack.current_phase, 'executing');
 
-    const cleared = await clearModeState({ cwd, mode: 'oh-my-ralpha' });
+    const cleared = await clearModeState({ cwd, mode: 'ralpha' });
     assert.equal(cleared, true);
-    assert.equal(await readModeState({ cwd, mode: 'oh-my-ralpha' }), null);
+    assert.equal(await readModeState({ cwd, mode: 'ralpha' }), null);
   });
 
   it('supports local trace append and show', async () => {
@@ -213,7 +213,7 @@ describe('oh-my-ralpha standalone runtime', () => {
     assert.equal(result.phase, 'planning');
     assert.equal(result.finalSkill, 'ralplan');
     assert.equal(result.activation.phase, 'planning');
-    assert.equal(await readModeState({ cwd, mode: 'oh-my-ralpha' }), null);
+    assert.equal(await readModeState({ cwd, mode: 'ralpha' }), null);
   });
 
   it('does not route acceptance subagent prompts back into oh-my-ralpha', async () => {
@@ -226,7 +226,7 @@ describe('oh-my-ralpha standalone runtime', () => {
 
     assert.equal(result.matched, false);
     assert.equal(result.finalSkill, null);
-    assert.equal(await readModeState({ cwd, mode: 'oh-my-ralpha' }), null);
+    assert.equal(await readModeState({ cwd, mode: 'ralpha' }), null);
   });
 
   it('keeps placeholder planning artifacts incomplete', async () => {
@@ -261,7 +261,7 @@ describe('oh-my-ralpha standalone runtime', () => {
     assert.equal(result.planningArtifacts.status.rounds.complete, true);
   });
 
-  it('activates oh-my-ralpha and seeds runtime state when the prompt is well specified', async () => {
+  it('activates ralpha and seeds runtime state when the prompt is well specified', async () => {
     const cwd = await makeTempWorkspace('oh-my-ralpha-route-activate-');
     await writeCompletePlanningArtifacts(cwd, 'Implement runtime route activation');
     const result = await routePrompt({
@@ -273,11 +273,11 @@ describe('oh-my-ralpha standalone runtime', () => {
 
     assert.equal(result.gateApplied, false);
     assert.equal(result.phase, 'execution');
-    assert.equal(result.finalSkill, 'oh-my-ralpha');
-    assert.equal(result.activation.skill, 'oh-my-ralpha');
+    assert.equal(result.finalSkill, 'ralpha');
+    assert.equal(result.activation.skill, 'ralpha');
     assert.equal(result.activation.phase, 'execution');
 
-    const modeState = await readModeState({ cwd, mode: 'oh-my-ralpha', sessionId: 'sess-1' });
+    const modeState = await readModeState({ cwd, mode: 'ralpha', sessionId: 'sess-1' });
     assert.equal(modeState.iteration, 1);
     assert.equal(modeState.max_iterations, 40);
     assert.equal(modeState.current_phase, 'starting');
@@ -293,6 +293,8 @@ describe('oh-my-ralpha standalone runtime', () => {
     });
 
     assert.equal(existsSync(join(installed.targetSkillDir, 'SKILL.md')), true);
+    assert.match(installed.targetSkillDir, /\/skills\/ralpha$/);
+    assert.match(installed.launcherPath, /\/bin\/ralpha$/);
     assert.equal(existsSync(installed.launcherPath), true);
     assert.equal(existsSync(installed.installedCliPath), true);
     assert.equal(existsSync(join(installed.targetSkillDir, 'companions', 'prompts', 'architect.md')), true);
@@ -311,6 +313,8 @@ describe('oh-my-ralpha standalone runtime', () => {
     assert.equal(existsSync(join(installed.targetSkillDir, 'skills', 'web-clone', 'SKILL.md')), false);
 
     const launcher = await readFile(installed.launcherPath, 'utf-8');
+    const installedSkill = await readFile(join(installed.targetSkillDir, 'SKILL.md'), 'utf-8');
+    assert.match(installedSkill, /^name: ralpha$/m);
     assert.match(launcher, new RegExp(escapeRegExp(installed.installedCliPath)));
     assert.doesNotMatch(launcher, new RegExp(escapeRegExp(runtimeRoot)));
   });

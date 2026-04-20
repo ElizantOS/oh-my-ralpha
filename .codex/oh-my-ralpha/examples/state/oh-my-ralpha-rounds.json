@@ -1,5 +1,5 @@
 {
-  "task": "oh-my-ralpha",
+  "task": "ralpha",
   "current_iteration": 6,
   "max_iterations": 40,
   "current_focus": "Complete: oh-my-ralpha is packaged, verified, and ready for packaging",
@@ -10,7 +10,7 @@
     "build": "npm run build passed in the source oh-my-codex packaging workspace",
     "targeted_tests": "targeted skill contract and routing checks passed before extraction",
     "skill_validation": "validateSkillFile('./skills/oh-my-ralpha/SKILL.md') -> repo-skill-ok",
-    "runtime_assertions": "detectKeywords('$ralpha continue the backlog') resolves to oh-my-ralpha; detectPrimaryKeyword('我们继续处理这个 backlog') resolves to oh-my-ralpha",
+    "runtime_assertions": "detectKeywords('$ralpha continue the backlog') resolves to ralpha; natural-language continuation phrases do not activate without explicit $ralpha intent",
     "architect_verdict": "APPROVED for packaging readiness",
     "reviewer_verdict": "No findings. Ready for packaging."
   },

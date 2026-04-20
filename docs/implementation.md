@@ -112,7 +112,7 @@ Bundled companion skills:
 
 - `ai-slop-cleaner`
 
-The companion sources live under `companions/prompts/` and `companions/skills/` so Codex does not auto-discover them while developing this repository. `setup` installs them into the target Codex home under `prompts/`, `agents/`, and `skills/`. The oh-my-ralpha MCP/CLI remains intentionally narrow; it does not expose execution commands for those roles. Implementation stays in the main thread for this standalone package; `team-executor` is not bundled because the OMX team runtime is not bundled. Invoking `$oh-my-ralpha` is treated as explicit user intent for the workflow's per-slice native-subagent acceptance contract. If native subagents are unavailable, the workflow records degraded-mode evidence in rounds/trace instead of silently treating a manual pass as equivalent.
+The companion sources live under `companions/prompts/` and `companions/skills/` so Codex does not auto-discover them while developing this repository. `setup` installs them into the target Codex home under `prompts/`, `agents/`, and `skills/`. The oh-my-ralpha MCP/CLI remains intentionally narrow; it does not expose execution commands for those roles. Implementation stays in the main thread for this standalone package; `team-executor` is not bundled because the OMX team runtime is not bundled. Invoking `$ralpha` is treated as explicit user intent for the workflow's per-slice native-subagent acceptance contract; `$oh-my-ralpha` is not a supported compatibility alias. If native subagents are unavailable, the workflow records degraded-mode evidence in rounds/trace instead of silently treating a manual pass as equivalent.
 
 ### Routing Layer
 
@@ -198,7 +198,7 @@ Design intent:
 
 The package registers one progressive MCP server in `.codex/config.toml`:
 
-- `oh_my_ralpha`
+- `ralpha`
 
 It exposes four grouped tools so Codex can directly call:
 
@@ -254,7 +254,7 @@ The repository currently tests:
 The package also provides:
 
 ```bash
-oh-my-ralpha verify --scope project
+ralpha verify --scope project
 ```
 
 That preflight currently checks:

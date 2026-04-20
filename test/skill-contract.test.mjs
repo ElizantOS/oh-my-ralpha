@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  OH_MY_RALPHA_REQUIRED_TRUTH_SOURCES,
-  OH_MY_RALPHA_STATE_DEFAULTS,
-  OH_MY_RALPHA_TEAM_LANES,
+  RALPHA_REQUIRED_TRUTH_SOURCES,
+  RALPHA_STATE_DEFAULTS,
+  RALPHA_TEAM_LANES,
 } from '../src/contract.mjs';
 
 const skill = readFileSync(
@@ -18,6 +18,10 @@ const flow = readFileSync(
 );
 
 describe('oh-my-ralpha skill contract', () => {
+  it('names the installed Codex skill ralpha', () => {
+    assert.match(skill, /^name:\s+ralpha$/m);
+  });
+
   it('keeps the Ralph-derived execution skeleton', () => {
     assert.match(skill, /Ralph-derived/i);
     assert.match(skill, /persistent state/i);
@@ -26,7 +30,7 @@ describe('oh-my-ralpha skill contract', () => {
   });
 
   it('documents the required truth-source files', () => {
-    for (const path of OH_MY_RALPHA_REQUIRED_TRUTH_SOURCES) {
+    for (const path of RALPHA_REQUIRED_TRUTH_SOURCES) {
       assert.match(skill, new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
     assert.match(skill, /Keep exactly one slice `in_progress`/i);
@@ -35,15 +39,27 @@ describe('oh-my-ralpha skill contract', () => {
   it('locks the plan-first, decomposition, and lane model', () => {
     assert.match(skill, /Plan-first gate/i);
     assert.match(skill, /sub-TODO/i);
-    for (const lane of OH_MY_RALPHA_TEAM_LANES) {
+    for (const lane of RALPHA_TEAM_LANES) {
       assert.match(skill, new RegExp(lane.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
   });
 
+  it('documents user interruption scheduling while ralpha is active', () => {
+    assert.match(skill, /User_Interruption_Protocol/);
+    assert.match(skill, /later user messages are insertions into the active workflow/i);
+    assert.match(skill, /Current-slice correction/i);
+    assert.match(skill, /Interrupt slice/i);
+    assert.match(skill, /INT-\*/);
+    assert.match(skill, /return_to: <current_slice>/);
+    assert.match(skill, /Independent side task/i);
+    assert.match(skill, /BACKLOG-\*/);
+    assert.match(skill, /Do not use `current_phase: "paused"` as a response to user insertions/i);
+  });
+
   it('documents the seeded state defaults', () => {
-    assert.match(skill, new RegExp(`mode: "${OH_MY_RALPHA_STATE_DEFAULTS.mode}"`));
-    assert.match(skill, new RegExp(`iteration: ${OH_MY_RALPHA_STATE_DEFAULTS.iteration}`));
-    assert.match(skill, new RegExp(`max_iterations: ${OH_MY_RALPHA_STATE_DEFAULTS.maxIterations}`));
+    assert.match(skill, new RegExp(`mode: "${RALPHA_STATE_DEFAULTS.mode}"`));
+    assert.match(skill, new RegExp(`iteration: ${RALPHA_STATE_DEFAULTS.iteration}`));
+    assert.match(skill, new RegExp(`max_iterations: ${RALPHA_STATE_DEFAULTS.maxIterations}`));
   });
 
   it('keeps the audit artifact optional but consistency-bound', () => {
@@ -54,7 +70,7 @@ describe('oh-my-ralpha skill contract', () => {
 
   it('locks verification gates separately from Stop hook protection', () => {
     assert.match(skill, /mandatory native-subagent slice acceptance/i);
-    assert.match(skill, /oh-my-ralpha invocation as explicit user intent/i);
+    assert.match(skill, /\$ralpha`? invocation as explicit user intent/i);
     assert.match(skill, /Each completed slice has fresh evidence/i);
     assert.match(skill, /Spawn `architect`, `code-reviewer`, and `code-simplifier` for every completed slice/i);
     assert.match(skill, /Do not mark a slice `completed` until all three acceptance agents have returned PASS\/APPROVED/i);
@@ -63,7 +79,12 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(skill, /ai-slop-cleaner.*--no-deslop/i);
     assert.match(skill, /Post-deslop regression passed/i);
     assert.match(skill, /`Stop` hook is a cleanup guard, not a verification lane/i);
+    assert.match(skill, /current_phase: "awaiting_user"/i);
+    assert.match(skill, /only active non-terminal phase that may end a turn/i);
     assert.match(skill, /current_phase: "paused"/i);
+    assert.match(skill, /resumable metadata only/i);
+    assert.match(skill, /never permission to stop/i);
+    assert.match(skill, /Blocker states such as acceptance timeouts/i);
     assert.match(skill, /active: true/);
     assert.match(skill, /active: false.*current_phase: "paused_after_\*"/);
     assert.match(skill, /does not replace per-slice fresh evidence[\s\S]*`architect` \/ `code-reviewer` \/ `code-simplifier` slice acceptance[\s\S]*final deslop pass[\s\S]*post-deslop regression/i);
@@ -78,8 +99,8 @@ describe('oh-my-ralpha skill contract', () => {
 
   it('documents the built-in JS runtime and fallback model', () => {
     assert.match(skill, /Standalone_Runtime/);
-    assert.match(skill, /oh-my-ralpha state read/i);
-    assert.match(skill, /oh-my-ralpha doctor/i);
+    assert.match(skill, /ralpha state read/i);
+    assert.match(skill, /ralpha doctor/i);
     assert.match(skill, /node bin\/oh-my-ralpha\.js/i);
     assert.match(skill, /planning phase/i);
     assert.match(skill, /degraded mode/i);

@@ -115,7 +115,7 @@ They are bundled in this repository under `companions/prompts/` and installed by
 
 - `ai-slop-cleaner`
 
-The oh-my-ralpha MCP/CLI still stays narrow: it manages state, trace, workflow scaffolding, admin, hooks, and setup. It does not expose separate CLI/MCP commands that execute `architect`, `code-reviewer`, or `code-simplifier`; those are installed for Codex's prompt/native-agent surfaces. Invoking `$oh-my-ralpha` is an explicit request for the workflow's per-slice native-subagent acceptance contract. `ai-slop-cleaner` is installed as the final closeout cleanup skill.
+The oh-my-ralpha MCP/CLI still stays narrow: it manages state, trace, workflow scaffolding, admin, hooks, and setup. It does not expose separate CLI/MCP commands that execute `architect`, `code-reviewer`, or `code-simplifier`; those are installed for Codex's prompt/native-agent surfaces. Invoking `$ralpha` is an explicit request for the workflow's per-slice native-subagent acceptance contract. `ai-slop-cleaner` is installed as the final closeout cleanup skill.
 
 ## Codex integration surface
 
@@ -126,7 +126,7 @@ The current Codex integration has two layers:
   - `UserPromptSubmit`
   - `Stop`
 - **MCP**
-  - `oh_my_ralpha`
+  - `ralpha`
   - tools: `ralpha_state`, `ralpha_trace`, `ralpha_workflow`, `ralpha_admin`
 
 This means the package can influence prompt routing and expose runtime actions through MCP tools without recording prompt, tool, or turn payload logs.
@@ -150,7 +150,7 @@ That document covers:
 - `skills/oh-my-ralpha/`
   - packaged skill documents
 - `.codex/oh-my-ralpha/examples/`
-  - curated example context, plan, and state artifacts
+  - curated example context and state artifacts
 - `.codex/oh-my-ralpha/working-model/`
   - live writable truth-source root used by the runtime
 - `src/`
@@ -221,8 +221,8 @@ CODEX_AUTH_JSON=/path/to/auth.json npm run docker:shell
 host modes. Native hooks can add context and block stops, but they cannot make
 Codex change collaboration mode.
 
-When a `$ralpha` prompt is underspecified, the hook activates an
-oh-my-ralpha planning phase, creates missing planning artifacts, and instructs
+When a `$ralpha` prompt is underspecified, the hook activates a
+ralpha planning phase, creates missing planning artifacts, and instructs
 the model to refine PRD/test-spec/workboard/rounds instead of editing product
 code. Execution activates only after the artifacts are decision-complete and the
 next prompt is execution-specific.
@@ -236,18 +236,18 @@ npm test
 Use the built-in runtime with:
 
 ```bash
-oh-my-ralpha doctor --scope project
-oh-my-ralpha setup --scope project --force
-oh-my-ralpha verify --scope project
-oh-my-ralpha workflow init --task "bootstrap a new task"
-oh-my-ralpha workflow route --text '$ralpha update src/router.mjs with activation tests' --activate
-oh-my-ralpha state read --mode oh-my-ralpha
-oh-my-ralpha trace show
+ralpha doctor --scope project
+ralpha setup --scope project --force
+ralpha verify --scope project
+ralpha workflow init --task "bootstrap a new task"
+ralpha workflow route --text '$ralpha update src/router.mjs with activation tests' --activate
+ralpha state read --mode ralpha
+ralpha trace show
 ```
 
-After `setup`, Codex also gets native hooks plus one progressive `oh-my-ralpha` MCP server:
+After `setup`, Codex also gets native hooks plus one progressive `ralpha` MCP server:
 
-- `oh_my_ralpha`
+- `ralpha`
 - `ralpha_state`
 - `ralpha_trace`
 - `ralpha_workflow`
@@ -267,7 +267,7 @@ node bin/oh-my-ralpha.js doctor
 
 The tests cover:
 
-- public trigger aliases such as `$ralpha` and `继续处理`
+- the canonical public trigger `$ralpha`
 - the packaged skill contract
 - the sample `.codex/oh-my-ralpha` truth-source artifacts
 - the standalone JS runtime for install/doctor/workflow/state/trace/route

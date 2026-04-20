@@ -3,7 +3,8 @@ import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-export const DEFAULT_SKILL_NAME = 'oh-my-ralpha';
+export const PACKAGE_NAME = 'oh-my-ralpha';
+export const DEFAULT_SKILL_NAME = 'ralpha';
 
 export function resolveRepoRoot(cwd = process.cwd()) {
   return resolve(cwd);
@@ -22,7 +23,7 @@ export function resolveCodexHome(explicit) {
 }
 
 export function workingModelDir(cwd) {
-  return join(resolveRepoRoot(cwd), '.codex', DEFAULT_SKILL_NAME, 'working-model');
+  return join(resolveRepoRoot(cwd), '.codex', PACKAGE_NAME, 'working-model');
 }
 
 function workingModelSubdir(cwd, name) {
@@ -77,7 +78,7 @@ export function installedLauncherPath(codexHome, commandName = DEFAULT_SKILL_NAM
   return join(installedBinDir(codexHome), commandName);
 }
 
-export function resolvePackagedSkillLayout(runtimeRoot, skillName = DEFAULT_SKILL_NAME) {
+export function resolvePackagedSkillLayout(runtimeRoot, skillName = PACKAGE_NAME) {
   const nestedSkillDir = join(runtimeRoot, 'skills', skillName);
   const nestedSkillPath = join(nestedSkillDir, 'SKILL.md');
   if (existsSync(nestedSkillPath)) {
