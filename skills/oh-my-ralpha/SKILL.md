@@ -253,6 +253,7 @@ Bundled companions are installed by `setup` from this package, not fetched from 
 
 - role prompts/native agents: `architect`, `code-reviewer`, `code-simplifier`
 - skills: `ai-slop-cleaner`
+- `uninstall` removes those bundled companions when their files still match this package's managed copies; pre-existing or user-edited companion files are preserved
 
 If a companion is missing from the target Codex home, `doctor` reports the fallback path:
 

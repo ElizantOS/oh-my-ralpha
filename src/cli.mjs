@@ -77,6 +77,7 @@ export async function runCli(argv) {
     case 'uninstall': {
       const result = await uninstallCodexIntegration({
         cwd,
+        runtimeRoot,
         codexHome: options['codex-home'],
         scope: options.scope ? String(options.scope) : 'user',
       });

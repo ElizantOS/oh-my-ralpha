@@ -233,6 +233,22 @@ Run the standalone checks with:
 npm test
 ```
 
+## Quick install and uninstall
+
+Install the full local Codex integration into the user Codex home:
+
+```bash
+node bin/oh-my-ralpha.js setup --scope user --force && node bin/oh-my-ralpha.js verify --scope user
+```
+
+Uninstall the user-scope integration:
+
+```bash
+node bin/oh-my-ralpha.js uninstall --scope user
+```
+
+`setup --scope user` installs the `ralpha` skill/runtime, launcher, Codex config/hooks, bundled role prompts/native agents, and bundled companion skill into the user Codex home. `uninstall --scope user` removes the managed user-scope integration and bundled companion files that still match this package's managed copies.
+
 Use the built-in runtime with:
 
 ```bash
@@ -253,7 +269,7 @@ After `setup`, Codex also gets native hooks plus one progressive `ralpha` MCP se
 - `ralpha_workflow`
 - `ralpha_admin`
 
-Install the skill into `CODEX_HOME` with:
+Install only the skill/runtime bundle and launcher into `CODEX_HOME` with:
 
 ```bash
 node bin/oh-my-ralpha.js install

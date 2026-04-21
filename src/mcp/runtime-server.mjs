@@ -169,6 +169,7 @@ const server = createMcpServer({
       async (args) => {
         return await uninstallCodexIntegration({
           cwd: resolveToolCwd(args),
+          runtimeRoot,
           codexHome: args.codexHome,
           scope: args.scope ?? 'user',
         });

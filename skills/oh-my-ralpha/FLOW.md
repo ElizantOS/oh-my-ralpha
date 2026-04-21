@@ -64,6 +64,7 @@ This skill is Ralph specialized for the workflow that actually worked during the
 This standalone package ships JS fallbacks for the Codex integration surfaces that `oh-my-ralpha` depends on:
 
 - install
+- setup / uninstall, including bundled companion install and safe managed companion cleanup
 - doctor
 - init
 - state read/write/clear

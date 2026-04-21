@@ -93,6 +93,7 @@ describe('oh-my-ralpha skill contract', () => {
 
   it('documents bundled companion capabilities', () => {
     assert.match(skill, /Bundled companions are installed by `setup` from this package/i);
+    assert.match(skill, /`uninstall` removes those bundled companions/i);
     assert.match(skill, /role prompts\/native agents: `architect`, `code-reviewer`, `code-simplifier`/i);
     assert.match(skill, /skills: `ai-slop-cleaner`/i);
   });

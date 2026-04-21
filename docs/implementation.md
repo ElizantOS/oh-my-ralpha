@@ -232,6 +232,13 @@ The package uses a conservative ownership policy.
 - install copies a runtime payload into `CODEX_HOME`
 - launcher points to the installed runtime, not the source checkout
 - this makes the install relocatable
+- uninstall removes the installed `ralpha` runtime and launcher
+
+### bundled companions
+
+- setup installs bundled role prompts/native agents and companion skills
+- uninstall removes bundled companion files only when their contents still match this package's managed copies
+- pre-existing or user-edited companion files are preserved
 
 ## Verification Model
 

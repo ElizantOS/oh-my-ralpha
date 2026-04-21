@@ -60,7 +60,7 @@ describe('oh-my-ralpha setup integration', () => {
     });
     await import('node:fs/promises').then(({ writeFile }) => writeFile(hooksPath, JSON.stringify(hooks, null, 2) + '\n', 'utf-8'));
 
-    await uninstallCodexIntegration({ cwd, codexHome, scope: 'user' });
+    const uninstallResult = await uninstallCodexIntegration({ cwd, runtimeRoot, codexHome, scope: 'user' });
 
     const nextHooks = JSON.parse(await readFile(hooksPath, 'utf-8'));
     const nextConfig = await readFile(join(codexHome, 'config.toml'), 'utf-8');
@@ -72,6 +72,42 @@ describe('oh-my-ralpha setup integration', () => {
     assert.doesNotMatch(nextConfig, /\[mcp_servers\.ralpha\]/);
     assert.equal(existsSync(join(codexHome, 'skills', 'ralpha')), false);
     assert.equal(existsSync(join(codexHome, 'bin', 'ralpha')), false);
+    assert.equal(existsSync(join(codexHome, 'prompts', 'architect.md')), false);
+    assert.equal(existsSync(join(codexHome, 'agents', 'architect.toml')), false);
+    assert.equal(existsSync(join(codexHome, 'prompts', 'code-reviewer.md')), false);
+    assert.equal(existsSync(join(codexHome, 'agents', 'code-reviewer.toml')), false);
+    assert.equal(existsSync(join(codexHome, 'prompts', 'code-simplifier.md')), false);
+    assert.equal(existsSync(join(codexHome, 'agents', 'code-simplifier.toml')), false);
+    assert.equal(existsSync(join(codexHome, 'skills', 'ai-slop-cleaner')), false);
+    assert.equal(uninstallResult.companions.prompts.every((entry) => entry.removed), true);
+    assert.equal(uninstallResult.companions.skills.every((entry) => entry.removed), true);
+  });
+
+  it('preserves pre-existing companion files that setup did not own', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-uninstall-user-companions-');
+    const codexHome = await makeTempWorkspace('oh-my-ralpha-codex-home-');
+    const runtimeRoot = runtimeRootFromModule(import.meta.url);
+    const userSkillDir = join(codexHome, 'skills', 'ai-slop-cleaner');
+    await mkdir(join(codexHome, 'prompts'), { recursive: true });
+    await mkdir(join(codexHome, 'agents'), { recursive: true });
+    await mkdir(userSkillDir, { recursive: true });
+    await writeFile(join(codexHome, 'prompts', 'architect.md'), '# user architect prompt\n', 'utf-8');
+    await writeFile(join(codexHome, 'agents', 'architect.toml'), 'name = "architect"\n# user agent\n', 'utf-8');
+    await writeFile(join(userSkillDir, 'SKILL.md'), '---\nname: ai-slop-cleaner\ndescription: user copy\n---\n', 'utf-8');
+
+    await setupCodexIntegration({
+      cwd,
+      runtimeRoot,
+      codexHome,
+      scope: 'user',
+    });
+    const result = await uninstallCodexIntegration({ cwd, runtimeRoot, codexHome, scope: 'user' });
+
+    assert.equal(await readFile(join(codexHome, 'prompts', 'architect.md'), 'utf-8'), '# user architect prompt\n');
+    assert.equal(await readFile(join(codexHome, 'agents', 'architect.toml'), 'utf-8'), 'name = "architect"\n# user agent\n');
+    assert.equal(await readFile(join(userSkillDir, 'SKILL.md'), 'utf-8'), '---\nname: ai-slop-cleaner\ndescription: user copy\n---\n');
+    assert.equal(result.companions.prompts.find((entry) => entry.id === 'architect').removed, false);
+    assert.equal(result.companions.skills.find((entry) => entry.id === 'ai-slop-cleaner').removed, false);
   });
 
   it('fails loudly when hooks.json is invalid instead of overwriting it', async () => {

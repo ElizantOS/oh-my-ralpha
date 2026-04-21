@@ -11,6 +11,7 @@ import { appendTraceEvent, getTracePath, readTraceEvents } from '../trace.mjs';
 import { setupCodexIntegration, uninstallCodexIntegration, resolveScopedCodexHome } from '../setup.mjs';
 import { verifyInstallation } from '../verify.mjs';
 import { DEFAULT_SKILL_NAME, runtimeRootFromModule } from '../paths.mjs';
+import { COMPANION_AGENT_PROMPTS, COMPANION_SKILLS } from '../companions.mjs';
 
 const runtimeRoot = runtimeRootFromModule(import.meta.url, 2);
 
@@ -300,7 +301,23 @@ function adminDryRunPaths({ cwd, codexHome, scope }) {
     join(resolvedCodexHome, 'hooks.json'),
     join(resolvedCodexHome, 'skills', DEFAULT_SKILL_NAME),
     join(resolvedCodexHome, 'bin', DEFAULT_SKILL_NAME),
+    ...COMPANION_AGENT_PROMPTS.flatMap((capability) => [
+      join(resolvedCodexHome, 'prompts', `${capability.installName}.md`),
+      join(resolvedCodexHome, 'agents', `${capability.installName}.toml`),
+    ]),
+    ...COMPANION_SKILLS.map((capability) => join(resolvedCodexHome, 'skills', capability.installName)),
   ];
+}
+
+function removedCompanionPaths(companions) {
+  if (!companions) return [];
+  return [
+    ...companions.prompts.flatMap((entry) => [
+      entry.removedPrompt ? entry.promptPath : null,
+      entry.removedAgent ? entry.agentPath : null,
+    ]),
+    ...companions.skills.map((entry) => entry.removed ? entry.skillDir : null),
+  ].filter(Boolean);
 }
 
 function ralphaAdminTool() {
@@ -389,6 +406,7 @@ function ralphaAdminTool() {
 
       const result = await uninstallCodexIntegration({
         cwd,
+        runtimeRoot,
         codexHome: args.codexHome,
         scope,
       });
@@ -397,7 +415,13 @@ function ralphaAdminTool() {
         command,
         dryRun: false,
         result,
-        changedPaths: [result.configPath, result.hooksPath, result.removedSkillDir, result.removedLauncherPath].filter(Boolean),
+        changedPaths: [
+          result.configPath,
+          result.hooksPath,
+          result.removedSkillDir,
+          result.removedLauncherPath,
+          ...removedCompanionPaths(result.companions),
+        ].filter(Boolean),
         next: {
           instruction: 'Uninstall finished; do not use ralpha MCP tools until setup is run again.',
         },

@@ -152,6 +152,67 @@ async function installBundledCompanions({ codexHome, runtimeRoot, scope = 'user'
   return summary;
 }
 
+async function removeFileIfMatches(path, expectedContent) {
+  if (!existsSync(path)) return false;
+  const existing = await readFile(path, 'utf-8');
+  if (existing !== expectedContent) return false;
+  await rm(path, { force: true });
+  return true;
+}
+
+async function removeBundledCompanions({ codexHome, runtimeRoot }) {
+  const summary = {
+    sourceRoot: runtimeRoot,
+    prompts: [],
+    skills: [],
+  };
+
+  const sourcePromptsDir = join(runtimeRoot, 'companions', 'prompts');
+  const sourceSkillsDir = join(runtimeRoot, 'companions', 'skills');
+
+  for (const capability of COMPANION_AGENT_PROMPTS) {
+    const sourcePromptPath = join(sourcePromptsDir, `${capability.installName}.md`);
+    const promptPath = join(installedPromptsDir(codexHome), `${capability.installName}.md`);
+    const agentPath = join(installedAgentsDir(codexHome), `${capability.installName}.toml`);
+    if (!existsSync(sourcePromptPath)) {
+      summary.prompts.push({ id: capability.id, removed: false, reason: 'missing-source-prompt', promptPath, agentPath });
+      continue;
+    }
+
+    const promptContent = await readFile(sourcePromptPath, 'utf-8');
+    const agentContent = nativeAgentToml(capability, promptContent);
+    const removedPrompt = await removeFileIfMatches(promptPath, promptContent);
+    const removedAgent = await removeFileIfMatches(agentPath, agentContent);
+    summary.prompts.push({
+      id: capability.id,
+      removed: removedPrompt || removedAgent,
+      removedPrompt,
+      removedAgent,
+      promptPath,
+      agentPath,
+    });
+  }
+
+  for (const capability of COMPANION_SKILLS) {
+    const sourceSkillPath = join(sourceSkillsDir, capability.installName, BUNDLED_COMPANION_SKILL_FILE);
+    const targetSkillDir = installedSkillDir(codexHome, capability.installName);
+    const targetSkillPath = join(targetSkillDir, 'SKILL.md');
+    if (!existsSync(sourceSkillPath)) {
+      summary.skills.push({ id: capability.id, removed: false, reason: 'missing-source-skill', skillDir: targetSkillDir });
+      continue;
+    }
+
+    const sourceContent = await readFile(sourceSkillPath, 'utf-8');
+    const removed = await removeFileIfMatches(targetSkillPath, sourceContent);
+    if (removed) {
+      await rm(targetSkillDir, { recursive: true, force: true });
+    }
+    summary.skills.push({ id: capability.id, removed, skillDir: targetSkillDir });
+  }
+
+  return summary;
+}
+
 function codexConfigPath(codexHome) {
   return join(codexHome, 'config.toml');
 }
@@ -440,6 +501,7 @@ export async function setupCodexIntegration({
 
 export async function uninstallCodexIntegration({
   cwd,
+  runtimeRoot,
   codexHome,
   scope = 'user',
 }) {
@@ -450,6 +512,9 @@ export async function uninstallCodexIntegration({
   const configPath = await removeManagedConfig(targetCodexHome, skillDir, {
     keepCodexHooks: hooksResult.hooksRemain,
   });
+  const companions = runtimeRoot
+    ? await removeBundledCompanions({ codexHome: targetCodexHome, runtimeRoot })
+    : null;
   await rm(skillDir, { recursive: true, force: true });
   await rm(launcherPath, { force: true });
   return {
@@ -459,5 +524,6 @@ export async function uninstallCodexIntegration({
     removedLauncherPath: launcherPath,
     configPath,
     hooksPath: hooksResult.path,
+    companions,
   };
 }
