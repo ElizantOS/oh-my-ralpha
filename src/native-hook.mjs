@@ -91,6 +91,15 @@ function readAwaitingUserReason(state) {
   return '';
 }
 
+function isSubagentWaitReason(value) {
+  const reason = safeString(value).trim();
+  if (!reason) return false;
+  const namesSubagentWork = /sub-?agent|native agent|acceptance agent|architect|code-reviewer|code-simplifier|reviewer|simplifier/i.test(reason);
+  const namesWaiting = /wait|waiting|await|pending|timeout|timed out|capacity|limit|cap/i.test(reason);
+  const namesUserDecision = /user.*(decision|input|approval|clarification)|human.*(decision|input|approval|clarification)|(decision|input|approval|clarification).*user/i.test(reason);
+  return namesSubagentWork && namesWaiting && !namesUserDecision;
+}
+
 async function readRalphaModeState(payload, cwd) {
   const sessionId = readSessionId(payload);
   if (sessionId) {
@@ -315,6 +324,12 @@ async function buildStopOutput(payload, cwd) {
           reason: `oh-my-ralpha ${scope} mode is awaiting user input for ${resumeTarget} but missing state.awaiting_user_reason or state.awaiting_user_prompt. Record why the next user message is needed before ending the turn.`,
         };
       }
+      if (isSubagentWaitReason(awaitingReason)) {
+        return {
+          decision: 'block',
+          reason: `oh-my-ralpha ${scope} mode uses awaiting_user for a subagent wait (${awaitingReason}). awaiting_user is only for real user decisions or missing user input. For subagent timeouts or host limits, record degraded acceptance evidence in the workboard/rounds ledger and continue.`,
+        };
+      }
       return null;
     }
 
@@ -331,7 +346,7 @@ async function buildStopOutput(payload, cwd) {
 
     return {
       decision: 'block',
-      reason: `oh-my-ralpha ${scope} mode is still active (${phase || 'executing'}). Continue working. If the task truly needs the next user message, write current_phase:"awaiting_user" with state.next_todo or state.current_slice plus state.awaiting_user_reason before ending the turn. Stop protection is not a substitute for fresh evidence, architect/code-reviewer/code-simplifier slice acceptance, final deslop, or post-deslop regression.`,
+      reason: `oh-my-ralpha ${scope} mode is still active (${phase || 'executing'}). Continue working. If the task truly needs the next user message, write current_phase:"awaiting_user" with state.next_todo or state.current_slice plus state.awaiting_user_reason before ending the turn. Do not use awaiting_user for subagent timeouts or capacity limits. Stop protection is not a substitute for fresh evidence, bounded reviewer-only architect/code-reviewer/code-simplifier acceptance, final deslop, or post-deslop regression.`,
     };
   }
   return null;

@@ -88,12 +88,15 @@ describe('oh-my-ralpha setup integration', () => {
     const codexHome = await makeTempWorkspace('oh-my-ralpha-codex-home-');
     const runtimeRoot = runtimeRootFromModule(import.meta.url);
     const userSkillDir = join(codexHome, 'skills', 'ai-slop-cleaner');
+    const userHarnessDir = join(codexHome, 'skills', 'tmux-cli-agent-harness');
     await mkdir(join(codexHome, 'prompts'), { recursive: true });
     await mkdir(join(codexHome, 'agents'), { recursive: true });
     await mkdir(userSkillDir, { recursive: true });
+    await mkdir(userHarnessDir, { recursive: true });
     await writeFile(join(codexHome, 'prompts', 'architect.md'), '# user architect prompt\n', 'utf-8');
     await writeFile(join(codexHome, 'agents', 'architect.toml'), 'name = "architect"\n# user agent\n', 'utf-8');
     await writeFile(join(userSkillDir, 'SKILL.md'), '---\nname: ai-slop-cleaner\ndescription: user copy\n---\n', 'utf-8');
+    await writeFile(join(userHarnessDir, 'SKILL.md'), '---\nname: tmux-cli-agent-harness\ndescription: user copy\n---\n', 'utf-8');
 
     await setupCodexIntegration({
       cwd,
@@ -106,8 +109,10 @@ describe('oh-my-ralpha setup integration', () => {
     assert.equal(await readFile(join(codexHome, 'prompts', 'architect.md'), 'utf-8'), '# user architect prompt\n');
     assert.equal(await readFile(join(codexHome, 'agents', 'architect.toml'), 'utf-8'), 'name = "architect"\n# user agent\n');
     assert.equal(await readFile(join(userSkillDir, 'SKILL.md'), 'utf-8'), '---\nname: ai-slop-cleaner\ndescription: user copy\n---\n');
+    assert.equal(await readFile(join(userHarnessDir, 'SKILL.md'), 'utf-8'), '---\nname: tmux-cli-agent-harness\ndescription: user copy\n---\n');
     assert.equal(result.companions.prompts.find((entry) => entry.id === 'architect').removed, false);
     assert.equal(result.companions.skills.find((entry) => entry.id === 'ai-slop-cleaner').removed, false);
+    assert.equal(result.companions.skills.find((entry) => entry.id === 'tmux-cli-agent-harness').removed, false);
   });
 
   it('fails loudly when hooks.json is invalid instead of overwriting it', async () => {
@@ -187,6 +192,9 @@ describe('oh-my-ralpha setup integration', () => {
     assert.equal(existsSync(join(codexHome, 'prompts', 'code-simplifier.md')), true);
     assert.equal(existsSync(join(codexHome, 'agents', 'code-simplifier.toml')), true);
     assert.equal(existsSync(join(codexHome, 'skills', 'ai-slop-cleaner', 'SKILL.md')), true);
+    assert.equal(existsSync(join(codexHome, 'skills', 'tmux-cli-agent-harness', 'SKILL.md')), true);
+    assert.equal(existsSync(join(codexHome, 'skills', 'tmux-cli-agent-harness', 'references', 'tmux-control.md')), true);
+    assert.equal(existsSync(join(codexHome, 'skills', 'tmux-cli-agent-harness', 'references', 'test-prompts.json')), true);
     assert.equal(existsSync(join(codexHome, 'prompts', 'analyst.md')), false);
     assert.equal(existsSync(join(codexHome, 'agents', 'analyst.toml')), false);
     assert.equal(existsSync(join(codexHome, 'prompts', 'team-executor.md')), false);
@@ -196,18 +204,28 @@ describe('oh-my-ralpha setup integration', () => {
     assert.equal(existsSync(join(codexHome, 'skills', 'web-clone', 'SKILL.md')), false);
 
     const architectAgent = await readFile(join(codexHome, 'agents', 'architect.toml'), 'utf-8');
+    const codeReviewerAgent = await readFile(join(codexHome, 'agents', 'code-reviewer.toml'), 'utf-8');
+    const codeSimplifierAgent = await readFile(join(codexHome, 'agents', 'code-simplifier.toml'), 'utf-8');
     assert.match(architectAgent, /name = "architect"/);
     assert.match(architectAgent, /model_reasoning_effort = "high"/);
     assert.match(architectAgent, /You are Architect/);
     assert.doesNotMatch(architectAgent, /developer_instructions = """\n---/);
+    assert.match(codeReviewerAgent, /model_reasoning_effort = "medium"/);
+    assert.match(codeSimplifierAgent, /model_reasoning_effort = "medium"/);
+    assert.match(codeReviewerAgent, /Never call `ralpha_state write`/);
+    assert.match(codeSimplifierAgent, /Review-Only Default/);
+    assert.match(codeSimplifierAgent, /`WRITE_MODE_ALLOWED`/);
 
     const report = doctorReport({ runtimeRoot, codexHome });
     const architect = report.companions.find((entry) => entry.id === 'architect');
     const slopCleaner = report.companions.find((entry) => entry.id === 'ai-slop-cleaner');
+    const tmuxHarness = report.companions.find((entry) => entry.id === 'tmux-cli-agent-harness');
     assert.equal(architect.installed, true);
     assert.equal(architect.source, 'bundled-agent-prompt');
     assert.equal(slopCleaner.installed, true);
     assert.equal(slopCleaner.source, 'bundled-skill');
+    assert.equal(tmuxHarness.installed, true);
+    assert.equal(tmuxHarness.source, 'bundled-skill');
   });
 
   it('does not install a project-scope companion skill when user scope already provides it', async () => {
@@ -373,7 +391,7 @@ describe('oh-my-ralpha setup integration', () => {
     assert.match(blocked.reason, /session sess-stop/);
     assert.match(blocked.reason, /not a substitute/i);
     assert.match(blocked.reason, /fresh evidence/i);
-    assert.match(blocked.reason, /architect\/code-reviewer\/code-simplifier slice acceptance/i);
+    assert.match(blocked.reason, /bounded reviewer-only architect\/code-reviewer\/code-simplifier acceptance/i);
     assert.match(blocked.reason, /final deslop/i);
     assert.match(blocked.reason, /post-deslop regression/i);
 
@@ -448,6 +466,35 @@ describe('oh-my-ralpha setup integration', () => {
     });
 
     assert.equal(output, null);
+  });
+
+  it('blocks awaiting_user when it is only waiting on subagents', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-awaiting-subagent-');
+    await writeModeState({
+      cwd,
+      mode: 'ralpha',
+      sessionId: 'sess-awaiting-subagent',
+      patch: {
+        active: true,
+        current_phase: 'awaiting_user',
+        state: {
+          next_todo: 'P0-04',
+          current_slice: 'P0-04',
+          awaiting_user_reason: 'waiting for code-reviewer and code-simplifier acceptance',
+        },
+      },
+    });
+
+    const blocked = await dispatchNativeHook({
+      hook_event_name: 'Stop',
+      cwd,
+      session_id: 'sess-awaiting-subagent',
+    });
+
+    assert.equal(blocked.decision, 'block');
+    assert.match(blocked.reason, /awaiting_user is only for real user decisions/i);
+    assert.match(blocked.reason, /subagent timeouts or host limits/i);
+    assert.match(blocked.reason, /degraded acceptance evidence/i);
   });
 
   it('blocks awaiting_user state without resume reason', async () => {

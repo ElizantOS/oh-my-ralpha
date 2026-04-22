@@ -17,15 +17,15 @@ export const COMPANION_AGENT_PROMPTS = Object.freeze([
     installName: 'code-reviewer',
     fallback: 'manual final code review note in rounds/trace',
     description: 'Comprehensive review across all concerns',
-    reasoningEffort: 'high',
+    reasoningEffort: 'medium',
   },
   {
     id: 'code-simplifier',
     type: 'agent-prompt',
     installName: 'code-simplifier',
     fallback: 'manual simplification checklist in rounds/trace',
-    description: 'Simplifies recently modified code for clarity and consistency without changing behavior',
-    reasoningEffort: 'high',
+    description: 'Reviews recently modified code for simplification opportunities without editing by default',
+    reasoningEffort: 'medium',
   },
 ]);
 
@@ -40,6 +40,12 @@ export const COMPANION_SKILLS = Object.freeze([
     type: 'skill',
     installName: 'ai-slop-cleaner',
     fallback: 'manual simplification checklist in rounds/trace',
+  },
+  {
+    id: 'tmux-cli-agent-harness',
+    type: 'skill',
+    installName: 'tmux-cli-agent-harness',
+    fallback: 'native subagent acceptance plus manual tmux capture/recovery notes in rounds/trace',
   },
 ]);
 

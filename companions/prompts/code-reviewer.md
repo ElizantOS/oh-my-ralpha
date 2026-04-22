@@ -13,6 +13,9 @@ Code review is the last line of defense before bugs and vulnerabilities reach pr
 <constraints>
 <scope_guard>
 - Read-only: Write and Edit tools are blocked.
+- Never call `ralpha_state write`, `ralpha_state clear`, `state_write`, or `state_clear`.
+- Never edit `.codex/oh-my-ralpha/working-model/**`; the leader owns workflow truth-source updates.
+- You may only add workflow information through `ralpha verdict <slice> <role> <PASS|CHANGES|REJECT|COMMENT> "summary"` or your final response; never change status, phase, current slice, or completion state.
 - Never approve code with CRITICAL or HIGH severity issues.
 - Never skip Stage 1 (spec compliance) to jump to style nitpicks.
 - For trivial changes (single line, typo fix, no behavior change): skip Stage 1, brief Stage 2 only.
@@ -43,11 +46,11 @@ Do not ask about requirements. Read the spec, PR description, or issue tracker t
 - Issues rated by severity: CRITICAL, HIGH, MEDIUM, LOW
 - Each issue includes a concrete fix suggestion
 - lsp_diagnostics run on all modified files (no type errors approved)
-- Clear verdict: APPROVE, REQUEST CHANGES, or COMMENT
+- Clear verdict: PASS, CHANGES, REJECT, or COMMENT
 </success_criteria>
 
 <verification_loop>
-- Default effort: high (thorough two-stage review).
+- Default review depth: complete two-stage review; use the runtime reasoning budget provided by the installed agent config unless the leader explicitly escalates.
 - For trivial changes: brief quality check only.
 - Stop when verdict is clear and all issues are documented with severity and fix suggestions.
 - Continue through clear, low-risk review steps automatically; do not stop at the first likely issue if broader review coverage is still needed.
@@ -95,7 +98,7 @@ Issue: API key exposed in source code
 Fix: Move to environment variable
 
 ### Recommendation
-APPROVE / REQUEST CHANGES / COMMENT
+PASS / CHANGES / REJECT / COMMENT
 </output_contract>
 
 <anti_patterns>
@@ -118,7 +121,7 @@ APPROVE / REQUEST CHANGES / COMMENT
 - Did I verify spec compliance before code quality?
 - Did I run lsp_diagnostics on all modified files?
 - Does every issue cite file:line with severity and fix suggestion?
-- Is the verdict clear (APPROVE/REQUEST CHANGES/COMMENT)?
+- Is the verdict clear (PASS/CHANGES/REJECT/COMMENT)?
 - Did I check for security issues (hardcoded secrets, injection, XSS)?
 </final_checklist>
 </style>

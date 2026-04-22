@@ -130,6 +130,7 @@ describe('oh-my-ralpha MCP stdio servers', () => {
     const toolNames = responses[1].result.tools.map((tool) => tool.name);
     assert.deepEqual(toolNames, [
       'ralpha_state',
+      'ralpha_acceptance',
       'ralpha_trace',
       'ralpha_workflow',
       'ralpha_admin',
@@ -149,6 +150,7 @@ describe('oh-my-ralpha MCP stdio servers', () => {
 
     assert.deepEqual(responses[1].result.tools.map((tool) => tool.name), [
       'ralpha_state',
+      'ralpha_acceptance',
       'ralpha_trace',
       'ralpha_workflow',
       'ralpha_admin',

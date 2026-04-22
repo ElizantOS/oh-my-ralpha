@@ -111,8 +111,11 @@ Bundled role prompts/native agent configs:
 Bundled companion skills:
 
 - `ai-slop-cleaner`
+- `tmux-cli-agent-harness`
 
-The companion sources live under `companions/prompts/` and `companions/skills/` so Codex does not auto-discover them while developing this repository. `setup` installs them into the target Codex home under `prompts/`, `agents/`, and `skills/`. The oh-my-ralpha MCP/CLI remains intentionally narrow; it does not expose execution commands for those roles. Implementation stays in the main thread for this standalone package; `team-executor` is not bundled because the OMX team runtime is not bundled. Invoking `$ralpha` is treated as explicit user intent for the workflow's per-slice native-subagent acceptance contract; `$oh-my-ralpha` is not a supported compatibility alias. If native subagents are unavailable, the workflow records degraded-mode evidence in rounds/trace instead of silently treating a manual pass as equivalent.
+The companion sources live under `companions/prompts/` and `companions/skills/` so Codex does not auto-discover them while developing this repository. `setup` installs them into the target Codex home under `prompts`, `agents`, and `skills`, including companion skill references. The oh-my-ralpha MCP/CLI remains intentionally narrow; it does not expose execution commands for those roles. Implementation stays in the main thread for this standalone package; `team-executor` is not bundled because the OMX team runtime is not bundled. Invoking `$ralpha` is treated as explicit user intent for the workflow's per-slice native-subagent acceptance contract; `$oh-my-ralpha` is not a supported compatibility alias. If native subagents are unavailable, the workflow records degraded-mode evidence in rounds/trace instead of silently treating a manual pass as equivalent.
+
+`tmux-cli-agent-harness` provides the v1 tmux integration profile. It is an evidence/interaction layer for reviewer, test, and diagnostic sessions: tmux owns pane history, attach, capture, transcript, and cleanup; ralpha MCP owns durable state, trace, and acceptance verdicts. v1 intentionally does not add mailbox files.
 
 ### Routing Layer
 
@@ -200,12 +203,15 @@ The package registers one progressive MCP server in `.codex/config.toml`:
 
 - `ralpha`
 
-It exposes four grouped tools so Codex can directly call:
+It exposes five grouped tools so Codex can directly call:
 
-- `ralpha_state` for active mode state read/write/clear
+- `ralpha_state` for active mode state read/write/clear; write/clear requires `actorRole: "leader"` plus `mutationReason`, and reviewer/subagent roles are rejected
+- `ralpha_acceptance` for append-only acceptance verdicts/findings/suggested ledger text
 - `ralpha_trace` for evidence and recovery trace append/show
 - `ralpha_workflow` for route/init/plan/interview task shaping
 - `ralpha_admin` for doctor/verify/setup/uninstall maintenance
+
+Acceptance subagents are append-only on the workflow control plane: they may append acceptance evidence through `ralpha_acceptance`, but they must not mutate active mode state, workboard status, rounds status, current phase, or current slice.
 
 The package verifies the unified server in release preflight.
 
@@ -249,7 +255,7 @@ There are two levels of verification.
 The repository currently tests:
 
 - keyword routing
-- runtime state/trace
+- runtime state/acceptance/trace
 - setup/uninstall ownership
 - MCP handler behavior
 - MCP stdio handshake

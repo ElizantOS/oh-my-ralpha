@@ -104,7 +104,7 @@ for (const name of [
 }
 
 const mountArgs = [
-  '--tmpfs', '/root/.codex:mode=700',
+  '--tmpfs', '/root/.codex:mode=700,exec',
 ];
 
 if (existsSync(authPath)) {

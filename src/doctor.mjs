@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import {
   installedLauncherPath,
   installedSkillDir,
@@ -7,6 +8,11 @@ import {
 } from './paths.mjs';
 import { resolveCompanionStatuses } from './companions.mjs';
 import { resolveScopedCodexHome } from './setup.mjs';
+
+function commandAvailable(command, args = ['--version']) {
+  const result = spawnSync(command, args, { encoding: 'utf-8' });
+  return result.status === 0;
+}
 
 export function doctorReport({ runtimeRoot, codexHome, cwd = process.cwd(), scope = 'user' } = {}) {
   const resolvedCodexHome = resolveScopedCodexHome({ cwd, codexHome, scope });
@@ -26,6 +32,7 @@ export function doctorReport({ runtimeRoot, codexHome, cwd = process.cwd(), scop
     launcher: existsSync(launcherPath),
     codexBinOnPath: (process.env.PATH || '').split(':').includes(codexBinPath),
     mcpConfigured: /\[mcp_servers\.ralpha\]/.test(configContent),
+    tmuxAvailable: commandAvailable('tmux', ['-V']),
   };
   const suggestions = [];
 
@@ -37,6 +44,9 @@ export function doctorReport({ runtimeRoot, codexHome, cwd = process.cwd(), scop
   }
   if (!checks.mcpConfigured) {
     suggestions.push(`Re-run "ralpha setup --scope ${scope} --force" to restore MCP server configuration.`);
+  }
+  if (!checks.tmuxAvailable) {
+    suggestions.push('Install tmux or use native subagent acceptance fallback; tmux-cli-agent-harness requires the tmux binary for inspectable reviewer panes.');
   }
 
   return {

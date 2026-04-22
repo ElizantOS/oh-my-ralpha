@@ -1,9 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { initWorkspace } from '../src/init.mjs';
 import { scaffoldInterview, scaffoldPlan } from '../src/planning.mjs';
 import { readModeState, writeModeState, clearModeState } from '../src/state.mjs';
@@ -12,6 +13,7 @@ import { routePrompt } from '../src/router.mjs';
 import { doctorReport } from '../src/doctor.mjs';
 import { installSkill } from '../src/install.mjs';
 import { runCli } from '../src/cli.mjs';
+import { listAcceptance, summarizeAcceptance, waitForAcceptance } from '../src/acceptance.mjs';
 
 async function makeTempWorkspace(prefix) {
   return mkdtemp(join(tmpdir(), prefix));
@@ -152,6 +154,239 @@ describe('oh-my-ralpha standalone runtime', () => {
     const cleared = await clearModeState({ cwd, mode: 'ralpha' });
     assert.equal(cleared, true);
     assert.equal(await readModeState({ cwd, mode: 'ralpha' }), null);
+  });
+
+  it('requires leader actor for CLI state mutations', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-state-cli-guard-');
+
+    await assert.rejects(
+      () => runCli(['state', 'write', '--cwd', cwd, '--mode', 'ralpha', '--json', '{"active":true}']),
+      /actorRole is required/,
+    );
+
+    const originalLog = console.log;
+    const lines = [];
+    console.log = (value) => {
+      lines.push(String(value));
+    };
+    try {
+      await runCli([
+        'state',
+        'write',
+        '--cwd',
+        cwd,
+        '--mode',
+        'ralpha',
+        '--actor',
+        'leader',
+        '--reason',
+        'leader test write',
+        '--json',
+        '{"active":true,"current_phase":"executing"}',
+      ]);
+    } finally {
+      console.log = originalLog;
+    }
+
+    assert.equal(JSON.parse(lines[0]).active, true);
+    assert.equal((await readModeState({ cwd, mode: 'ralpha' })).current_phase, 'executing');
+  });
+
+  it('supports the single verdict CLI format for append-only acceptance evidence', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-verdict-cli-');
+    const originalLog = console.log;
+    const lines = [];
+    console.log = (value) => {
+      lines.push(String(value));
+    };
+    try {
+      await runCli(['verdict', 'P0-02', 'architect', 'PASS', 'accepted', '--cwd', cwd]);
+      await runCli(['verdict', 'P0-03', 'code-reviewer', 'CHANGES', 'ctx type mismatch', '--cwd', cwd]);
+    } finally {
+      console.log = originalLog;
+    }
+
+    const first = JSON.parse(lines[0]);
+    const second = JSON.parse(lines[1]);
+    const listed = await listAcceptance({ cwd });
+    assert.equal(first.record.verdict, 'PASS');
+    assert.equal(first.record.role, 'architect');
+    assert.equal(first.record.summary, 'accepted');
+    assert.equal(second.record.verdict, 'CHANGES');
+    assert.equal(second.record.role, 'code-reviewer');
+    assert.equal(listed.records.length, 2);
+    assert.equal(await readModeState({ cwd, mode: 'ralpha' }), null);
+  });
+
+  it('keeps reviewer CHANGES blocking even after a later leader PASS', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-acceptance-gate-');
+    const originalLog = console.log;
+    console.log = () => {};
+    try {
+      await runCli(['verdict', 'H0-03', 'code-reviewer', 'CHANGES', 'return type error', '--cwd', cwd]);
+      await runCli(['verdict', 'H0-03', 'leader', 'PASS', 'manual acceptance after timeout', '--cwd', cwd]);
+    } finally {
+      console.log = originalLog;
+    }
+
+    const summary = await summarizeAcceptance({ cwd, sliceId: 'H0-03' });
+    assert.equal(summary.gate.has_blocking_reviewer_verdict, true);
+    assert.equal(summary.gate.can_record_manual_pass, false);
+    assert.equal(summary.gate.blocking_records[0].role, 'code-reviewer');
+    assert.equal(summary.gate.blocking_records[0].verdict, 'CHANGES');
+    assert.match(summary.gate.instruction, /Do not record leader\/manual PASS/);
+  });
+
+  it('clears reviewer CHANGES only with a later reviewer PASS for the same role', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-acceptance-gate-clear-');
+    const originalLog = console.log;
+    console.log = () => {};
+    try {
+      await runCli(['verdict', 'H0-03', 'code-reviewer', 'CHANGES', 'return type error', '--cwd', cwd]);
+      await runCli(['verdict', 'H0-03', 'code-reviewer', 'PASS', 'return type fixed', '--cwd', cwd]);
+    } finally {
+      console.log = originalLog;
+    }
+
+    const summary = await summarizeAcceptance({ cwd, sliceId: 'H0-03' });
+    assert.equal(summary.gate.has_blocking_reviewer_verdict, false);
+    assert.equal(summary.gate.can_record_manual_pass, true);
+    assert.equal(summary.gate.latest_by_role['code-reviewer'].verdict, 'PASS');
+  });
+
+  it('waits for required reviewer PASS records and returns accepted', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-acceptance-wait-accepted-');
+    const originalLog = console.log;
+    console.log = () => {};
+    try {
+      await runCli(['verdict', 'TEAM-01', 'architect', 'PASS', 'architect accepted', '--cwd', cwd]);
+      await runCli(['verdict', 'TEAM-01', 'code-reviewer', 'PASS', 'reviewer accepted', '--cwd', cwd]);
+    } finally {
+      console.log = originalLog;
+    }
+
+    const result = await waitForAcceptance({
+      cwd,
+      sliceId: 'TEAM-01',
+      roles: ['architect', 'code-reviewer'],
+      idleMs: 10,
+      maxMs: 100,
+      pollMs: 5,
+    });
+
+    assert.equal(result.status, 'accepted');
+    assert.equal(result.gate.has_blocking_reviewer_verdict, false);
+    assert.deepEqual(result.roles, ['architect', 'code-reviewer']);
+  });
+
+  it('returns blocked when a reviewer CHANGES verdict is latest', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-acceptance-wait-blocked-');
+    const originalLog = console.log;
+    console.log = () => {};
+    try {
+      await runCli(['verdict', 'TEAM-02', 'code-reviewer', 'CHANGES', 'fix return type', '--cwd', cwd]);
+      await runCli(['verdict', 'TEAM-02', 'leader', 'PASS', 'manual pass should not override', '--cwd', cwd]);
+    } finally {
+      console.log = originalLog;
+    }
+
+    const result = await waitForAcceptance({
+      cwd,
+      sliceId: 'TEAM-02',
+      roles: ['code-reviewer'],
+      idleMs: 10,
+      maxMs: 100,
+      pollMs: 5,
+    });
+
+    assert.equal(result.status, 'blocked');
+    assert.equal(result.gate.has_blocking_reviewer_verdict, true);
+    assert.equal(result.gate.blocking_records[0].verdict, 'CHANGES');
+  });
+
+  it('resets idle timeout when transcript log grows', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-acceptance-wait-log-');
+    const logPath = join(cwd, 'reviewer.log');
+    await writeFile(logPath, 'start\n', 'utf-8');
+
+    const waiting = waitForAcceptance({
+      cwd,
+      sliceId: 'TEAM-03',
+      roles: ['code-reviewer'],
+      logPath,
+      idleMs: 60,
+      maxMs: 200,
+      pollMs: 10,
+    });
+
+    await sleep(25);
+    await appendFile(logPath, 'still working\n', 'utf-8');
+    const result = await waiting;
+
+    assert.equal(result.status, 'idle_timeout');
+    assert.ok(result.activity.activity_resets.some((entry) => entry.sources.includes('log')));
+  });
+
+  it('returns idle_timeout when no evidence source changes', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-acceptance-wait-idle-');
+    const result = await waitForAcceptance({
+      cwd,
+      sliceId: 'TEAM-04',
+      roles: ['code-reviewer'],
+      idleMs: 10,
+      maxMs: 100,
+      pollMs: 5,
+    });
+
+    assert.equal(result.status, 'idle_timeout');
+    assert.equal(result.gate.has_reviewer_evidence, false);
+  });
+
+  it('exposes acceptance wait through the CLI command group', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-acceptance-wait-cli-');
+    const originalLog = console.log;
+    const lines = [];
+    console.log = (value) => {
+      lines.push(String(value));
+    };
+    try {
+      await runCli(['verdict', 'TEAM-05', 'architect', 'PASS', 'architect accepted', '--cwd', cwd]);
+      await runCli(['verdict', 'TEAM-05', 'code-reviewer', 'PASS', 'reviewer accepted', '--cwd', cwd]);
+      await runCli([
+        'acceptance',
+        'wait',
+        '--cwd',
+        cwd,
+        '--slice',
+        'TEAM-05',
+        '--roles',
+        'architect,code-reviewer',
+        '--idle-ms',
+        '10',
+        '--max-ms',
+        '100',
+        '--poll-ms',
+        '5',
+      ]);
+    } finally {
+      console.log = originalLog;
+    }
+
+    const waited = JSON.parse(lines.at(-1));
+    assert.equal(waited.status, 'accepted');
+    assert.deepEqual(waited.roles, ['architect', 'code-reviewer']);
+  });
+
+  it('rejects non-canonical verdict tokens', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-verdict-cli-strict-');
+    await assert.rejects(
+      () => runCli(['verdict', 'P0-02', 'architect', 'pass', 'accepted', '--cwd', cwd]),
+      /usage: ralpha verdict <slice> <role> <PASS\|CHANGES\|REJECT\|COMMENT>/,
+    );
+    await assert.rejects(
+      () => runCli(['verdict', 'P0-02', 'architect', 'BAD', 'fix it', '--cwd', cwd]),
+      /usage: ralpha verdict <slice> <role> <PASS\|CHANGES\|REJECT\|COMMENT>/,
+    );
   });
 
   it('supports local trace append and show', async () => {
@@ -304,6 +539,8 @@ describe('oh-my-ralpha standalone runtime', () => {
     assert.equal(existsSync(join(installed.targetSkillDir, 'prompts', 'code-reviewer.md')), false);
     assert.equal(existsSync(join(installed.targetSkillDir, 'prompts', 'code-simplifier.md')), false);
     assert.equal(existsSync(join(installed.targetSkillDir, 'companions', 'skills', 'ai-slop-cleaner', 'SKILL.bundle.md')), true);
+    assert.equal(existsSync(join(installed.targetSkillDir, 'companions', 'skills', 'tmux-cli-agent-harness', 'SKILL.bundle.md')), true);
+    assert.equal(existsSync(join(installed.targetSkillDir, 'companions', 'skills', 'tmux-cli-agent-harness', 'references', 'tmux-control.md')), true);
     assert.equal(existsSync(join(installed.targetSkillDir, 'companions', 'skills', 'ai-slop-cleaner', 'SKILL.md')), false);
     assert.equal(existsSync(join(installed.targetSkillDir, 'skills', 'ai-slop-cleaner', 'SKILL.md')), false);
     assert.equal(existsSync(join(installed.targetSkillDir, 'prompts', 'analyst.md')), false);
@@ -345,6 +582,9 @@ describe('oh-my-ralpha standalone runtime', () => {
     assert.equal(report.companions.find((entry) => entry.id === 'architect').installed, false);
     assert.equal(report.companions.find((entry) => entry.id === 'ai-slop-cleaner').type, 'skill');
     assert.equal(report.companions.find((entry) => entry.id === 'ai-slop-cleaner').source, 'fallback');
+    assert.equal(report.companions.find((entry) => entry.id === 'tmux-cli-agent-harness').type, 'skill');
+    assert.equal(report.companions.find((entry) => entry.id === 'tmux-cli-agent-harness').source, 'fallback');
+    assert.equal(typeof report.checks.tmuxAvailable, 'boolean');
   });
 
   it('returns an existing snapshot path instead of a phantom path on repeated init', async () => {

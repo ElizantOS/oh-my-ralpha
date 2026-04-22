@@ -33,7 +33,7 @@ describe('oh-my-ralpha truth-source examples', () => {
 
   it('ships a completed rounds ledger example', () => {
     assert.equal(validateRoundsLedger(roundsLedger), true);
-    assert.equal(roundsLedger.final_verdict, 'APPROVED');
+    assert.equal(roundsLedger.final_verdict, 'PASS');
     assert.equal(roundsLedger.next_todo, null);
     assert.deepEqual(roundsLedger.remaining_todos, []);
     assert.match(roundsLedger.verification_evidence.skill_validation, /repo-skill-ok/);

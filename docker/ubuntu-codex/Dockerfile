@@ -41,8 +41,15 @@ RUN unset HTTP_PROXY http_proxy HTTPS_PROXY https_proxy ALL_PROXY all_proxy \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+RUN unset HTTP_PROXY http_proxy HTTPS_PROXY https_proxy ALL_PROXY all_proxy \
+    && apt-get update \
+    && apt-get install -y tmux \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN node --version \
     && npm --version \
+    && tmux -V \
     && codex --version
 
 FROM base AS skill

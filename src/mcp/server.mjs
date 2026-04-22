@@ -6,8 +6,9 @@ import { doctorReport } from '../doctor.mjs';
 import { initWorkspace } from '../init.mjs';
 import { scaffoldInterview, scaffoldPlan } from '../planning.mjs';
 import { routePrompt } from '../router.mjs';
-import { getModeStatePath, readModeState, writeModeState, clearModeState } from '../state.mjs';
+import { getModeStatePath, readModeState, writeModeState, clearModeState, validateStateMutation } from '../state.mjs';
 import { appendTraceEvent, getTracePath, readTraceEvents } from '../trace.mjs';
+import { summarizeAcceptance, submitAcceptance, waitForAcceptance } from '../acceptance.mjs';
 import { setupCodexIntegration, uninstallCodexIntegration, resolveScopedCodexHome } from '../setup.mjs';
 import { verifyInstallation } from '../verify.mjs';
 import { DEFAULT_SKILL_NAME, runtimeRootFromModule } from '../paths.mjs';
@@ -64,6 +65,8 @@ function ralphaStateTool() {
         mode: { type: 'string' },
         patch: { type: 'object', description: 'Required for command=write.' },
         replace: { type: 'boolean', description: 'Only for command=write.' },
+        actorRole: { type: 'string', description: 'Required for command=write/clear. Use "leader" from the main workflow thread. Acceptance subagents are read-only and must not mutate state.' },
+        mutationReason: { type: 'string', description: 'Required when writing current_phase="awaiting_user"; must describe the real user input needed.' },
         sessionId: { type: 'string' },
         cwd: { type: 'string' },
         workingDirectory: { type: 'string' },
@@ -86,7 +89,7 @@ function ralphaStateTool() {
           statePath,
           state: await readModeState({ cwd, mode: mode.value, sessionId: args.sessionId }),
           next: {
-            instruction: 'Resume from this state if it is active; use ralpha_state write for state transitions.',
+            instruction: 'Resume from this state if it is active. Only the leader/main thread may use ralpha_state write/clear, and it must pass actorRole="leader" plus mutationReason.',
           },
         };
       }
@@ -97,6 +100,21 @@ function ralphaStateTool() {
             command: 'write',
             mode: mode.value,
             patch: { active: true },
+          });
+        }
+        const guard = validateStateMutation({
+          command,
+          patch: args.patch,
+          actorRole: args.actorRole,
+          mutationReason: args.mutationReason,
+          requireActor: true,
+        });
+        if (!guard.ok) {
+          return commandError(command, guard.error, {
+            command: 'write',
+            mode: mode.value,
+            actorRole: 'leader',
+            mutationReason: '<why the leader is changing state>',
           });
         }
         return {
@@ -116,6 +134,21 @@ function ralphaStateTool() {
         };
       }
 
+      const guard = validateStateMutation({
+        command,
+        actorRole: args.actorRole,
+        mutationReason: args.mutationReason,
+        requireActor: true,
+      });
+      if (!guard.ok) {
+        return commandError(command, guard.error, {
+          command: 'clear',
+          mode: mode.value,
+          actorRole: 'leader',
+          mutationReason: '<why the leader is clearing state>',
+        });
+      }
+
       return {
         ok: true,
         command,
@@ -132,13 +165,15 @@ function ralphaStateTool() {
 function ralphaTraceTool() {
   return createTool(
     'ralpha_trace',
-    'Record or inspect oh-my-ralpha evidence and recovery trace events. Use only for execution evidence, resume context, and diagnostics; do not use for state transitions, workflow setup, or install/admin actions.',
+    'Append or inspect oh-my-ralpha evidence and recovery trace events. This is the append-only information lane for acceptance subagents; do not use it for state transitions, workflow setup, or install/admin actions.',
     {
       type: 'object',
       properties: {
         command: { type: 'string', enum: ['append', 'show'] },
         type: { type: 'string', description: 'Required for command=append.' },
         metadata: { type: 'object', description: 'Only for command=append.' },
+        actorRole: { type: 'string', description: 'Role appending information, e.g. architect, code-reviewer, code-simplifier, or leader.' },
+        sliceId: { type: 'string', description: 'Optional active slice id for acceptance/evidence events.' },
         limit: { type: 'integer', description: 'Only for command=show.' },
         cwd: { type: 'string' },
         workingDirectory: { type: 'string' },
@@ -162,10 +197,15 @@ function ralphaTraceTool() {
           event: await appendTraceEvent({
             cwd,
             type: type.value,
-            metadata: args.metadata ?? {},
+            metadata: {
+              ...(args.metadata ?? {}),
+              ...(typeof args.actorRole === 'string' && args.actorRole.trim() ? { actorRole: args.actorRole.trim() } : {}),
+              ...(typeof args.sliceId === 'string' && args.sliceId.trim() ? { sliceId: args.sliceId.trim() } : {}),
+              append_only: true,
+            },
           }),
           next: {
-            instruction: 'Use this trace event as evidence in the workboard or rounds ledger.',
+            instruction: 'Leader/main thread may use this append-only trace event as evidence in the workboard or rounds ledger. Subagents must not mutate state.',
           },
         };
       }
@@ -180,6 +220,126 @@ function ralphaTraceTool() {
         }),
         next: {
           instruction: 'Use the newest relevant event to reconstruct the last stop point.',
+        },
+      };
+    },
+  );
+}
+
+function ralphaAcceptanceTool() {
+  return createTool(
+    'ralpha_acceptance',
+    'Submit or list append-only ralpha acceptance evidence. This is the only write surface acceptance subagents should use; it never mutates active state, workboard, rounds, current phase, or current slice.',
+    {
+      type: 'object',
+      properties: {
+        command: { type: 'string', enum: ['submit', 'list', 'wait'] },
+        sliceId: { type: 'string', description: 'Required for command=submit/wait. Active slice id such as P0-02.' },
+        role: { type: 'string', description: 'Required for command=submit. architect, code-reviewer, code-simplifier, leader, or manual.' },
+        roles: { type: 'array', description: 'Only for command=wait/list. Reviewer roles to wait for, e.g. ["architect","code-reviewer"].' },
+        verdict: { type: 'string', description: 'Required for command=submit. Exact token: PASS, CHANGES, REJECT, or COMMENT.' },
+        summary: { type: 'string', description: 'Short acceptance summary.' },
+        findings: { type: 'array', description: 'Optional findings. May contain strings or structured JSON objects.' },
+        suggestedLedgerText: { type: 'string', description: 'Optional exact text for the leader to copy into workboard/rounds.' },
+        evidence: { type: 'object', description: 'Optional supporting evidence. This is informational only.' },
+        limit: { type: 'integer', description: 'Only for command=list.' },
+        tmuxTarget: { type: 'string', description: 'Only for command=wait. Optional tmux target to capture as live evidence.' },
+        logPath: { type: 'string', description: 'Only for command=wait. Optional transcript log path to watch for growth.' },
+        idleMs: { type: 'integer', description: 'Only for command=wait. Inactivity timeout in milliseconds.' },
+        maxMs: { type: 'integer', description: 'Only for command=wait. Maximum total wait in milliseconds.' },
+        pollMs: { type: 'integer', description: 'Only for command=wait. Poll interval in milliseconds.' },
+        cwd: { type: 'string' },
+        workingDirectory: { type: 'string' },
+      },
+      required: ['command'],
+    },
+    async (args) => {
+      const parsed = readCommand(args, ['submit', 'list', 'wait']);
+      if (!parsed.ok) return parsed.response;
+      const { command } = parsed;
+      const cwd = resolveToolCwd(args);
+
+      if (command === 'submit') {
+        const sliceId = requiredText(args, 'sliceId', command);
+        if (!sliceId.ok) return sliceId.response;
+        const role = requiredText(args, 'role', command);
+        if (!role.ok) return role.response;
+        const verdict = requiredText(args, 'verdict', command);
+        if (!verdict.ok) return verdict.response;
+
+        try {
+          const result = await submitAcceptance({
+            cwd,
+            sliceId: sliceId.value,
+            role: role.value,
+            verdict: verdict.value,
+            summary: args.summary,
+            findings: args.findings,
+            suggestedLedgerText: args.suggestedLedgerText,
+            evidence: args.evidence,
+          });
+          return {
+            ok: true,
+            command,
+            ...result,
+            next: {
+              instruction: 'Acceptance evidence appended only. The leader/main thread must decide whether and how this changes state, workboard, or rounds.',
+            },
+          };
+        } catch (error) {
+          return commandError(command, error instanceof Error ? error.message : String(error), {
+            command: 'submit',
+            sliceId: '<slice id>',
+            role: 'architect | code-reviewer | code-simplifier | leader | manual',
+            verdict: 'PASS | CHANGES | REJECT | COMMENT',
+          });
+        }
+      }
+
+      if (command === 'wait') {
+        const sliceId = requiredText(args, 'sliceId', command);
+        if (!sliceId.ok) return sliceId.response;
+        try {
+          const result = await waitForAcceptance({
+            cwd,
+            sliceId: sliceId.value,
+            role: args.role,
+            roles: args.roles,
+            tmuxTarget: args.tmuxTarget,
+            logPath: args.logPath,
+            idleMs: args.idleMs,
+            maxMs: args.maxMs,
+            pollMs: args.pollMs,
+          });
+          return {
+            ok: true,
+            command,
+            ...result,
+            next: result.status === 'accepted'
+              ? { instruction: 'Acceptance wait finished with durable reviewer evidence; the leader may reduce it into workboard/rounds state.' }
+              : { instruction: 'Do not close or degrade reviewers unless wait returned idle_timeout/max_timeout with no blocking or accepted durable verdict.' },
+          };
+        } catch (error) {
+          return commandError(command, error instanceof Error ? error.message : String(error), {
+            command: 'wait',
+            sliceId: '<slice id>',
+            roles: ['architect', 'code-reviewer'],
+          });
+        }
+      }
+
+      return {
+        ok: true,
+        command,
+        ...(await summarizeAcceptance({
+          cwd,
+          sliceId: args.sliceId,
+          role: args.role,
+          roles: args.roles,
+          limit: Number.isInteger(args.limit) ? args.limit : undefined,
+        })),
+        next: {
+          instruction: 'Leader/main thread must inspect gate.has_blocking_reviewer_verdict before recording leader/manual PASS or degraded acceptance. Reviewer CHANGES/REJECT blocks slice completion until fixed or explicitly scheduled.',
         },
       };
     },
@@ -435,6 +595,7 @@ const server = createMcpServer({
   version: '0.1.0',
   tools: [
     ralphaStateTool(),
+    ralphaAcceptanceTool(),
     ralphaTraceTool(),
     ralphaWorkflowTool(),
     ralphaAdminTool(),

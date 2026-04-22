@@ -29,6 +29,7 @@ describe('oh-my-ralpha MCP integration', () => {
     const toolNames = response.result.tools.map((tool) => tool.name);
     assert.deepEqual(toolNames, [
       'ralpha_state',
+      'ralpha_acceptance',
       'ralpha_trace',
       'ralpha_workflow',
       'ralpha_admin',
@@ -48,6 +49,8 @@ describe('oh-my-ralpha MCP integration', () => {
           cwd,
           mode: 'ralpha',
           patch: { active: true, current_phase: 'executing' },
+          actorRole: 'leader',
+          mutationReason: 'test leader starts execution',
         },
       },
     });
@@ -71,6 +74,289 @@ describe('oh-my-ralpha MCP integration', () => {
     assert.equal(result.command, 'read');
     assert.equal(result.state.active, true);
     assert.ok(result.next);
+  });
+
+  it('rejects unified state writes from acceptance subagents', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'oh-my-ralpha-unified-state-guard-'));
+    const blockedResponse = await ralphaMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'ralpha_state',
+        arguments: {
+          command: 'write',
+          cwd,
+          mode: 'ralpha',
+          actorRole: 'architect',
+          mutationReason: 'waiting for code-reviewer acceptance',
+          patch: {
+            active: true,
+            current_phase: 'awaiting_user',
+            state: {
+              current_slice: 'P0-03',
+              awaiting_user_reason: 'waiting for code-reviewer acceptance',
+            },
+          },
+        },
+      },
+    });
+
+    const blocked = unwrapTextResult(blockedResponse);
+    assert.equal(blocked.ok, false);
+    assert.match(blocked.error, /read-only for ralpha state/i);
+
+    const readResponse = await ralphaMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'ralpha_state',
+        arguments: {
+          command: 'read',
+          cwd,
+          mode: 'ralpha',
+        },
+      },
+    });
+    assert.equal(unwrapTextResult(readResponse).state, null);
+  });
+
+  it('allows acceptance subagents to append information without mutating state', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'oh-my-ralpha-unified-append-only-'));
+    const appendResponse = await ralphaMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'ralpha_acceptance',
+        arguments: {
+          command: 'submit',
+          cwd,
+          sliceId: 'P0-02',
+          role: 'architect',
+          verdict: 'PASS',
+          summary: 'Architecture acceptance passed.',
+          suggestedLedgerText: 'Architect accepted P0-02; no state transition requested.',
+          evidence: { openedFiles: 2 },
+        },
+      },
+    });
+
+    const appended = unwrapTextResult(appendResponse);
+    assert.equal(appended.ok, true);
+    assert.equal(appended.record.role, 'architect');
+    assert.equal(appended.record.slice_id, 'P0-02');
+    assert.equal(appended.record.verdict, 'PASS');
+    assert.equal(appended.record.append_only, true);
+
+    const listResponse = await ralphaMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'ralpha_acceptance',
+        arguments: {
+          command: 'list',
+          cwd,
+          sliceId: 'P0-02',
+        },
+      },
+    });
+    const listed = unwrapTextResult(listResponse);
+    assert.equal(listed.ok, true);
+    assert.equal(listed.records.length, 1);
+    assert.equal(listed.records[0].suggested_ledger_text, 'Architect accepted P0-02; no state transition requested.');
+    assert.equal(listed.gate.has_blocking_reviewer_verdict, false);
+    assert.match(listed.next.instruction, /must inspect gate\.has_blocking_reviewer_verdict/);
+
+    const readResponse = await ralphaMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'ralpha_state',
+        arguments: {
+          command: 'read',
+          cwd,
+          mode: 'ralpha',
+        },
+      },
+    });
+    assert.equal(unwrapTextResult(readResponse).state, null);
+  });
+
+  it('surfaces blocking reviewer verdicts through acceptance list', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'oh-my-ralpha-unified-acceptance-blocking-'));
+    await ralphaMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'ralpha_acceptance',
+        arguments: {
+          command: 'submit',
+          cwd,
+          sliceId: 'H0-03',
+          role: 'code-reviewer',
+          verdict: 'CHANGES',
+          summary: 'Return type needs narrowing.',
+        },
+      },
+    });
+    await ralphaMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'ralpha_acceptance',
+        arguments: {
+          command: 'submit',
+          cwd,
+          sliceId: 'H0-03',
+          role: 'leader',
+          verdict: 'PASS',
+          summary: 'Manual acceptance after timeout.',
+        },
+      },
+    });
+
+    const listResponse = await ralphaMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'ralpha_acceptance',
+        arguments: {
+          command: 'list',
+          cwd,
+          sliceId: 'H0-03',
+        },
+      },
+    });
+
+    const listed = unwrapTextResult(listResponse);
+    assert.equal(listed.gate.has_blocking_reviewer_verdict, true);
+    assert.equal(listed.gate.can_record_manual_pass, false);
+    assert.equal(listed.gate.blocking_records[0].role, 'code-reviewer');
+    assert.equal(listed.gate.blocking_records[0].verdict, 'CHANGES');
+  });
+
+  it('scopes acceptance list gates to requested roles', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'oh-my-ralpha-unified-acceptance-list-roles-'));
+    await ralphaMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'ralpha_acceptance',
+        arguments: {
+          command: 'submit',
+          cwd,
+          sliceId: 'TEAM-02',
+          role: 'architect',
+          verdict: 'CHANGES',
+          summary: 'Architect wants boundary cleanup.',
+        },
+      },
+    });
+    await ralphaMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'ralpha_acceptance',
+        arguments: {
+          command: 'submit',
+          cwd,
+          sliceId: 'TEAM-02',
+          role: 'code-reviewer',
+          verdict: 'PASS',
+          summary: 'Reviewer accepted.',
+        },
+      },
+    });
+
+    const listResponse = await ralphaMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'ralpha_acceptance',
+        arguments: {
+          command: 'list',
+          cwd,
+          sliceId: 'TEAM-02',
+          roles: ['code-reviewer'],
+        },
+      },
+    });
+
+    const listed = unwrapTextResult(listResponse);
+    assert.deepEqual(listed.gate.roles, ['code-reviewer']);
+    assert.equal(listed.gate.has_blocking_reviewer_verdict, false);
+    assert.equal(listed.gate.latest_by_role['code-reviewer'].verdict, 'PASS');
+  });
+
+  it('waits for reviewer acceptance through the unified acceptance command group', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'oh-my-ralpha-unified-acceptance-wait-'));
+    await ralphaMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'ralpha_acceptance',
+        arguments: {
+          command: 'submit',
+          cwd,
+          sliceId: 'TEAM-01',
+          role: 'architect',
+          verdict: 'PASS',
+          summary: 'Architecture accepted.',
+        },
+      },
+    });
+    await ralphaMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'ralpha_acceptance',
+        arguments: {
+          command: 'submit',
+          cwd,
+          sliceId: 'TEAM-01',
+          role: 'code-reviewer',
+          verdict: 'PASS',
+          summary: 'Review accepted.',
+        },
+      },
+    });
+
+    const waitResponse = await ralphaMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'ralpha_acceptance',
+        arguments: {
+          command: 'wait',
+          cwd,
+          sliceId: 'TEAM-01',
+          roles: ['architect', 'code-reviewer'],
+          idleMs: 10,
+          maxMs: 100,
+          pollMs: 5,
+        },
+      },
+    });
+
+    const waited = unwrapTextResult(waitResponse);
+    assert.equal(waited.ok, true);
+    assert.equal(waited.command, 'wait');
+    assert.equal(waited.status, 'accepted');
+    assert.deepEqual(waited.roles, ['architect', 'code-reviewer']);
+    assert.equal(waited.gate.has_blocking_reviewer_verdict, false);
   });
 
   it('routes prompts through the unified workflow command group', async () => {
@@ -210,6 +496,8 @@ describe('oh-my-ralpha MCP integration', () => {
           cwd,
           mode: 'ralpha',
           patch: { active: true, current_phase: 'executing' },
+          actorRole: 'leader',
+          mutationReason: 'test leader starts execution',
         },
       },
     });
@@ -230,6 +518,36 @@ describe('oh-my-ralpha MCP integration', () => {
     const result = unwrapTextResult(response);
     assert.equal(result.active, true);
     assert.equal(result.current_phase, 'executing');
+  });
+
+  it('rejects legacy state server awaiting_user writes for subagent waits', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'oh-my-ralpha-mcp-state-guard-'));
+    const response = await stateMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'state_write',
+        arguments: {
+          cwd,
+          mode: 'ralpha',
+          actorRole: 'leader',
+          mutationReason: 'waiting for code-simplifier acceptance',
+          patch: {
+            active: true,
+            current_phase: 'awaiting_user',
+            state: {
+              current_slice: 'P0-03',
+              awaiting_user_reason: 'waiting for code-simplifier acceptance',
+            },
+          },
+        },
+      },
+    });
+
+    const result = unwrapTextResult(response);
+    assert.equal(result.ok, false);
+    assert.match(result.error, /only for real user input/i);
   });
 
   it('appends and reads trace events through MCP tool handlers', async () => {

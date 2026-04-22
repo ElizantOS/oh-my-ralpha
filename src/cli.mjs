@@ -6,10 +6,11 @@ import { initWorkspace } from './init.mjs';
 import { runNativeHookCli } from './native-hook.mjs';
 import { scaffoldInterview, scaffoldPlan } from './planning.mjs';
 import { appendTraceEvent, readTraceEvents } from './trace.mjs';
-import { clearModeState, readModeState, writeModeState } from './state.mjs';
+import { clearModeState, readModeState, writeModeState, validateStateMutation } from './state.mjs';
 import { routePrompt } from './router.mjs';
 import { setupCodexIntegration, uninstallCodexIntegration } from './setup.mjs';
 import { verifyInstallation } from './verify.mjs';
+import { submitAcceptance, waitForAcceptance } from './acceptance.mjs';
 
 function parseArgs(argv) {
   const args = [...argv];
@@ -45,6 +46,62 @@ function requiredOption(options, name) {
     throw new Error(`--${name} is required`);
   }
   return value;
+}
+
+const ACCEPTANCE_ROLES = new Set([
+  'architect',
+  'code-reviewer',
+  'code-simplifier',
+  'leader',
+  'manual',
+]);
+
+const CLI_VERDICTS = new Set(['PASS', 'CHANGES', 'REJECT', 'COMMENT']);
+
+function optionString(options, ...names) {
+  for (const name of names) {
+    if (typeof options[name] === 'string' && options[name].trim()) return options[name].trim();
+  }
+  return undefined;
+}
+
+function normalizeCliVerdict(value) {
+  const token = String(value || '').trim();
+  return CLI_VERDICTS.has(token) ? token : '';
+}
+
+function readJsonOption(options, name) {
+  return options[name] ? JSON.parse(String(options[name])) : undefined;
+}
+
+function optionInteger(options, name) {
+  if (options[name] === undefined) return undefined;
+  const parsed = Number.parseInt(String(options[name]), 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseVerdictCommand(positionals, options) {
+  const sliceId = optionString(options, 'slice') ?? positionals[1];
+  const role = optionString(options, 'role') ?? positionals[2];
+  const verdict = normalizeCliVerdict(optionString(options, 'verdict') ?? positionals[3]);
+  if (!sliceId || !role || !verdict) {
+    throw new Error('usage: ralpha verdict <slice> <role> <PASS|CHANGES|REJECT|COMMENT> "summary"');
+  }
+  if (!ACCEPTANCE_ROLES.has(String(role).toLowerCase())) {
+    throw new Error('role must be one of: architect, code-reviewer, code-simplifier, leader, manual');
+  }
+
+  const summary = optionString(options, 'summary') ?? positionals.slice(4).join(' ').trim();
+
+  return {
+    sliceId,
+    role,
+    verdict,
+    summary,
+    findings: readJsonOption(options, 'findings'),
+    evidence: readJsonOption(options, 'evidence'),
+    suggestedLedgerText: optionString(options, 'suggested-ledger-text'),
+  };
 }
 
 export async function runCli(argv) {
@@ -202,10 +259,29 @@ export async function runCli(argv) {
       if (subcommand === 'write') {
         const jsonText = requiredOption(options, 'json');
         const patch = JSON.parse(jsonText);
+        const actorRole = options.actor ? String(options.actor) : options.actorRole ? String(options.actorRole) : undefined;
+        const mutationReason = options.reason ? String(options.reason) : options.mutationReason ? String(options.mutationReason) : undefined;
+        const guard = validateStateMutation({
+          command: 'write',
+          patch,
+          actorRole,
+          mutationReason,
+          requireActor: true,
+        });
+        if (!guard.ok) throw new Error(guard.error);
         console.log(asJson(await writeModeState({ cwd, mode, sessionId, patch })));
         return;
       }
       if (subcommand === 'clear') {
+        const actorRole = options.actor ? String(options.actor) : options.actorRole ? String(options.actorRole) : undefined;
+        const mutationReason = options.reason ? String(options.reason) : options.mutationReason ? String(options.mutationReason) : undefined;
+        const guard = validateStateMutation({
+          command: 'clear',
+          actorRole,
+          mutationReason,
+          requireActor: true,
+        });
+        if (!guard.ok) throw new Error(guard.error);
         console.log(asJson({ cleared: await clearModeState({ cwd, mode, sessionId }) }));
         return;
       }
@@ -224,6 +300,30 @@ export async function runCli(argv) {
         return;
       }
       throw new Error('usage: ralpha trace <append|show>');
+    }
+    case 'acceptance': {
+      if (subcommand !== 'wait') throw new Error('usage: ralpha acceptance wait --slice <id> [--role <role>|--roles <roles>]');
+      const sliceId = optionString(options, 'slice', 'slice-id', 'sliceId');
+      if (!sliceId) throw new Error('--slice is required');
+      const result = await waitForAcceptance({
+        cwd,
+        sliceId,
+        role: optionString(options, 'role'),
+        roles: optionString(options, 'roles'),
+        tmuxTarget: optionString(options, 'tmux', 'tmux-target', 'tmuxTarget'),
+        logPath: optionString(options, 'log', 'log-path', 'logPath'),
+        idleMs: optionInteger(options, 'idle-ms'),
+        maxMs: optionInteger(options, 'max-ms'),
+        pollMs: optionInteger(options, 'poll-ms'),
+      });
+      console.log(asJson(result));
+      return;
+    }
+    case 'verdict': {
+      const acceptance = parseVerdictCommand(positionals, options);
+      const result = await submitAcceptance({ cwd, ...acceptance });
+      console.log(asJson(result));
+      return;
     }
     case 'route': {
       const text = requiredOption(options, 'text');
@@ -252,7 +352,7 @@ export async function runCli(argv) {
     }
     default:
       throw new Error(
-        'usage: oh-my-ralpha <install|setup|uninstall|doctor|verify|workflow|init|plan scaffold|interview scaffold|state|trace|route|hook native>',
+        'usage: oh-my-ralpha <install|setup|uninstall|doctor|verify|workflow|init|plan scaffold|interview scaffold|state|trace|acceptance wait|route|hook native>',
       );
   }
 }

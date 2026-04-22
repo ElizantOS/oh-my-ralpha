@@ -1,7 +1,7 @@
 import { createMcpServer, createTool, resolveToolCwd } from './protocol.mjs';
 import { fileURLToPath } from 'node:url';
 import { realpathSync } from 'node:fs';
-import { readModeState, writeModeState, clearModeState } from '../state.mjs';
+import { readModeState, writeModeState, clearModeState, validateStateMutation } from '../state.mjs';
 
 const server = createMcpServer({
   name: 'ralpha-state',
@@ -40,10 +40,30 @@ const server = createMcpServer({
           sessionId: { type: 'string' },
           patch: { type: 'object' },
           replace: { type: 'boolean' },
+          actorRole: { type: 'string', description: 'Required for write. Use "leader" from the main workflow thread; acceptance subagents are read-only.' },
+          mutationReason: { type: 'string', description: 'Required when writing current_phase="awaiting_user"; must describe the real user input needed.' },
         },
         required: ['mode', 'patch'],
       },
       async (args) => {
+        const guard = validateStateMutation({
+          command: 'write',
+          patch: args.patch,
+          actorRole: args.actorRole,
+          mutationReason: args.mutationReason,
+          requireActor: true,
+        });
+        if (!guard.ok) {
+          return {
+            ok: false,
+            error: guard.error,
+            expected: {
+              mode: args.mode,
+              actorRole: 'leader',
+              mutationReason: '<why the leader is changing state>',
+            },
+          };
+        }
         return await writeModeState({
           cwd: resolveToolCwd(args),
           mode: args.mode,
@@ -63,10 +83,29 @@ const server = createMcpServer({
           workingDirectory: { type: 'string' },
           mode: { type: 'string' },
           sessionId: { type: 'string' },
+          actorRole: { type: 'string', description: 'Required for clear. Use "leader" from the main workflow thread; acceptance subagents are read-only.' },
+          mutationReason: { type: 'string', description: 'Why the leader is clearing state.' },
         },
         required: ['mode'],
       },
       async (args) => {
+        const guard = validateStateMutation({
+          command: 'clear',
+          actorRole: args.actorRole,
+          mutationReason: args.mutationReason,
+          requireActor: true,
+        });
+        if (!guard.ok) {
+          return {
+            ok: false,
+            error: guard.error,
+            expected: {
+              mode: args.mode,
+              actorRole: 'leader',
+              mutationReason: '<why the leader is clearing state>',
+            },
+          };
+        }
         return {
           cleared: await clearModeState({
             cwd: resolveToolCwd(args),

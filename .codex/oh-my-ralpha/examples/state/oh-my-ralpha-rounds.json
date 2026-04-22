@@ -11,7 +11,7 @@
     "targeted_tests": "targeted skill contract and routing checks passed before extraction",
     "skill_validation": "validateSkillFile('./skills/oh-my-ralpha/SKILL.md') -> repo-skill-ok",
     "runtime_assertions": "detectKeywords('$ralpha continue the backlog') resolves to ralpha; natural-language continuation phrases do not activate without explicit $ralpha intent",
-    "architect_verdict": "APPROVED for packaging readiness",
+    "architect_verdict": "PASS for packaging readiness",
     "reviewer_verdict": "No findings. Ready for packaging."
   },
   "remaining_todos": [],
@@ -22,9 +22,10 @@
     "contract tests are green",
     "final review says ready for packaging"
   ],
-  "final_verdict": "APPROVED",
+  "final_verdict": "PASS",
   "notes": [
     "This standalone repo packages the extracted skill surface rather than the full oh-my-codex runtime.",
-    "Audit artifacts are optional but must stay consistent with workboard, rounds, and verdict when present."
+    "Audit artifacts are optional but must stay consistent with workboard, rounds, and verdict when present.",
+    "Native acceptance lanes are reviewer-only helpers; the leader owns code, ralpha_state, workboard, and rounds updates."
   ]
 }

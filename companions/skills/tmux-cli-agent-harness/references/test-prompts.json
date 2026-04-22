@@ -1,0 +1,142 @@
+{
+  "tests": [
+    {
+      "name": "direct_cli_agent_smoke",
+      "prompt": "Use tmux to run a generic interactive CLI agent smoke test in this repo, then clean up the CLI and tmux session after capturing evidence.",
+      "expected": [
+        "chooses or reports a tmux session name",
+        "uses direct mode when delegation is unnecessary",
+        "uses tmux new-session/send-keys/capture-pane or equivalent",
+        "captures screen evidence",
+        "gracefully exits the CLI or interrupts only with evidence",
+        "kills the tmux session after completion",
+        "verifies the session was reclaimed"
+      ]
+    },
+    {
+      "name": "bare_codex_tui_history",
+      "prompt": "Use tmux to start a real interactive Codex session with the plain `codex` command, not `codex exec`. Tell me the session name and transcript log path before continuing, then submit a marker prompt and prove the leader can see it in both capture-pane and the log.",
+      "expected": [
+        "starts a tmux shell and launches plain codex",
+        "does not use codex exec as a substitute for the interactive TUI",
+        "starts pipe-pane logging before launching codex",
+        "reports tmux attach command and log path before sending the marker prompt",
+        "submits input through the live Codex TUI",
+        "finds the marker in capture-pane history",
+        "finds the marker in the transcript log",
+        "notes that transcript logs can contain ANSI sequences and noisy service output"
+      ]
+    },
+    {
+      "name": "delegated_leader_starts_smoke",
+      "prompt": "As leader, create a tmux session first, hand it to a subagent for a longer generic CLI agent smoke test in this repo, then close the CLI/Codex process, close the subagent, and reclaim tmux after success.",
+      "expected": [
+        "chooses or reports a tmux session name",
+        "uses delegated leader-starts handoff",
+        "uses tmux new-session/send-keys/capture-pane or equivalent",
+        "leader independently captures pane evidence",
+        "captures subagent checkpoints",
+        "closes or retires the subagent after final report",
+        "kills the tmux session after completion",
+        "verifies cleanup"
+      ]
+    },
+    {
+      "name": "delegated_subagent_starts_smoke",
+      "prompt": "Have a subagent create the tmux session for a longer generic CLI agent smoke test in this repo. The subagent must return the session name and attach command immediately after creating tmux, then continue with checkpoints and cleanup after success.",
+      "expected": [
+        "uses delegated subagent-starts handoff",
+        "subagent creates the tmux session",
+        "subagent returns session name and attach command before substantive input",
+        "leader independently captures pane evidence after receiving the session name",
+        "captures subagent checkpoints",
+        "closes or retires the subagent after final report",
+        "kills the tmux session after completion",
+        "verifies cleanup"
+      ]
+    },
+    {
+      "name": "subagent_repl_loop_repeated_io",
+      "prompt": "I have a REPL-style terminal tool that repeatedly accepts prompts and outputs responses. Hand it to a subagent through tmux, send two inputs, capture both outputs, and summarize pass/fail evidence.",
+      "expected": [
+        "passes a compact handoff packet to the subagent",
+        "uses an observe-send-observe loop",
+        "uses paste-buffer for complex input without embedding arbitrary prompt text in shell quotes",
+        "records both output checkpoints",
+        "returns the tmux session name to the leader",
+        "reports unresolved busy or queued state if present"
+      ]
+    },
+    {
+      "name": "explicit_keep_open",
+      "prompt": "Use tmux to run a generic interactive CLI agent smoke test, but leave the session open because I want to attach and inspect it. Tell me the session and log path before continuing.",
+      "expected": [
+        "starts pipe-pane logging before the interactive run",
+        "reports session name and log path before continuing",
+        "captures screen evidence",
+        "does not kill the session because the user explicitly requested inspection",
+        "reports why cleanup was skipped",
+        "provides tmux attach command"
+      ]
+    },
+    {
+      "name": "interrupt_and_attach",
+      "prompt": "The subagent reports that the CLI agent is stuck in a TUI working state. Use tmux to inspect it as leader, interrupt safely if appropriate, and leave me the attach command.",
+      "expected": [
+        "leader captures pane evidence before acting",
+        "captures the screen before interrupting",
+        "uses Escape or C-c only with justification",
+        "captures the post-interrupt state",
+        "leaves the session inspectable"
+      ]
+    },
+    {
+      "name": "leader_history_review",
+      "prompt": "A subagent worked in a tmux session and returned the session name. Review the retained tmux history, explain whether the leader can see all prior output, and summarize any evidence gaps.",
+      "expected": [
+        "uses capture-pane with retained history such as -S -",
+        "states that tmux history is limited by history-limit and alternate-screen behavior",
+        "does not claim infinite transcript access",
+        "summarizes observed checkpoints and gaps"
+      ]
+    },
+    {
+      "name": "ralpha_reviewer_acceptance_writeback",
+      "prompt": "Use tmux-cli-agent-harness as an oh-my-ralpha code-reviewer lane for slice H0-03. Launch an inspectable tmux session, review the provided proof, and write the verdict through ralpha_acceptance without editing code or ralpha state.",
+      "expected": [
+        "uses a ralpha-<slice>-<role>-<shortid> session name",
+        "includes the slice id, role, proof, scope, and verdict command in the handoff",
+        "treats tmux as evidence and interaction layer only",
+        "does not introduce mailbox files",
+        "submits or instructs a ralpha_acceptance/ralpha verdict writeback",
+        "captures final pane evidence before cleanup or keep-open"
+      ]
+    },
+    {
+      "name": "ralpha_timeout_recovery_without_mailbox",
+      "prompt": "A native ralpha reviewer timed out but may have written append-only evidence. Use tmux history and ralpha MCP tools to recover the reviewer state before deciding whether to launch a replacement reviewer.",
+      "expected": [
+        "captures pane history or transcript before retry/degraded handling",
+        "checks ralpha_acceptance list or ralpha acceptance wait before launching a replacement",
+        "resets idle timeout when tmux pane output, transcript growth, or acceptance records change",
+        "treats CHANGES or REJECT as blocking even after wait timeout",
+        "uses ralpha_trace for operational evidence",
+        "does not use mailbox as the durable control plane",
+        "launches at most one replacement reviewer when no verdict exists and wait returns idle_timeout or max_timeout"
+      ]
+    },
+    {
+      "name": "ralpha_inspectable_codex_reviewers_submit",
+      "prompt": "Create an inspectable ralpha smoke where architect and code-reviewer each run inside their own tmux session with plain Codex TUI. Do not use native subagents. Submit long reviewer prompts reliably.",
+      "expected": [
+        "creates one tmux session per reviewer",
+        "launches plain codex --no-alt-screen in each reviewer session",
+        "uses named tmux buffers for role-specific prompts",
+        "submits Codex TUI prompts with raw carriage return via tmux load-buffer/paste-buffer",
+        "does not use native subagents",
+        "leaves reviewer sessions attachable for human inspection",
+        "verifies durable ralpha acceptance records before reporting PASS"
+      ]
+    }
+  ]
+}

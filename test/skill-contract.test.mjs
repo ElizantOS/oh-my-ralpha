@@ -16,6 +16,42 @@ const flow = readFileSync(
   join(process.cwd(), 'skills/oh-my-ralpha/FLOW.md'),
   'utf-8',
 );
+const architectPrompt = readFileSync(
+  join(process.cwd(), 'companions/prompts/architect.md'),
+  'utf-8',
+);
+const codeReviewerPrompt = readFileSync(
+  join(process.cwd(), 'companions/prompts/code-reviewer.md'),
+  'utf-8',
+);
+const codeSimplifierPrompt = readFileSync(
+  join(process.cwd(), 'companions/prompts/code-simplifier.md'),
+  'utf-8',
+);
+const tmuxHarnessSkill = readFileSync(
+  join(process.cwd(), 'companions/skills/tmux-cli-agent-harness/SKILL.bundle.md'),
+  'utf-8',
+);
+const tmuxHarnessControl = readFileSync(
+  join(process.cwd(), 'companions/skills/tmux-cli-agent-harness/references/tmux-control.md'),
+  'utf-8',
+);
+const tmuxHarnessPrompts = readFileSync(
+  join(process.cwd(), 'companions/skills/tmux-cli-agent-harness/references/test-prompts.json'),
+  'utf-8',
+);
+const dockerfile = readFileSync(
+  join(process.cwd(), 'docker/ubuntu-codex/Dockerfile'),
+  'utf-8',
+);
+const dockerShell = readFileSync(
+  join(process.cwd(), 'scripts/docker-codex-shell.mjs'),
+  'utf-8',
+);
+const readme = readFileSync(
+  join(process.cwd(), 'README.md'),
+  'utf-8',
+);
 
 describe('oh-my-ralpha skill contract', () => {
   it('names the installed Codex skill ralpha', () => {
@@ -69,13 +105,28 @@ describe('oh-my-ralpha skill contract', () => {
   });
 
   it('locks verification gates separately from Stop hook protection', () => {
-    assert.match(skill, /mandatory native-subagent slice acceptance/i);
+    assert.match(skill, /bounded reviewer-only native-subagent slice acceptance/i);
     assert.match(skill, /\$ralpha`? invocation as explicit user intent/i);
     assert.match(skill, /Each completed slice has fresh evidence/i);
-    assert.match(skill, /Spawn `architect`, `code-reviewer`, and `code-simplifier` for every completed slice/i);
-    assert.match(skill, /Do not mark a slice `completed` until all three acceptance agents have returned PASS\/APPROVED/i);
+    assert.match(skill, /Default acceptance path: one `code-reviewer` pass/i);
+    assert.match(skill, /Never launch all three acceptance lanes at once/i);
+    assert.match(skill, /hard maximum is two active acceptance agents per slice/i);
+    assert.match(skill, /leader-owned manual acceptance pass/i);
+    assert.match(skill, /Do not mark a slice `completed` until fresh evidence plus required native or degraded acceptance evidence is recorded/i);
     assert.match(skill, /degraded_missing_subagent_runtime/i);
-    assert.match(skill, /Each completed slice passed `architect` \/ `code-reviewer` \/ `code-simplifier` acceptance/i);
+    assert.match(skill, /degraded_subagent_limit/i);
+    assert.match(skill, /degraded_acceptance_timeout/i);
+    assert.match(skill, /first inspect append-only acceptance evidence/i);
+    assert.match(skill, /wait_agent` timeout is an observation timeout, not execution failure/i);
+    assert.match(skill, /ralpha acceptance wait --slice <id> --role <role>/i);
+    assert.match(skill, /accepted`, `blocked`, `idle_timeout`, or `max_timeout`/i);
+    assert.match(skill, /activity_reset/i);
+    assert.match(skill, /New output resets the idle timer/i);
+    assert.match(skill, /Do not close, replace, or degrade a reviewer lane while tmux\/transcript\/acceptance activity is still changing/i);
+    assert.match(skill, /Reviewer `CHANGES` or `REJECT` verdicts are blocking/i);
+    assert.match(skill, /A later leader\/manual `PASS` does not override them/i);
+    assert.match(skill, /one bounded replacement reviewer/i);
+    assert.match(skill, /Each completed slice has recorded reviewer-only bounded acceptance/i);
     assert.match(skill, /ai-slop-cleaner.*--no-deslop/i);
     assert.match(skill, /Post-deslop regression passed/i);
     assert.match(skill, /`Stop` hook is a cleanup guard, not a verification lane/i);
@@ -87,15 +138,107 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(skill, /Blocker states such as acceptance timeouts/i);
     assert.match(skill, /active: true/);
     assert.match(skill, /active: false.*current_phase: "paused_after_\*"/);
-    assert.match(skill, /does not replace per-slice fresh evidence[\s\S]*`architect` \/ `code-reviewer` \/ `code-simplifier` slice acceptance[\s\S]*final deslop pass[\s\S]*post-deslop regression/i);
+    assert.match(skill, /does not replace per-slice fresh evidence[\s\S]*bounded reviewer-only `architect` \/ `code-reviewer` \/ `code-simplifier` acceptance[\s\S]*final deslop pass[\s\S]*post-deslop regression/i);
     assert.match(flow, /Stop protection is not verification/i);
+    assert.match(flow, /Verification stays layered and bounded/i);
+    assert.match(flow, /Timeout handling must consume append-only reviewer evidence before degrading/i);
+    assert.match(flow, /Native wait timeouts are observation timeouts/i);
+    assert.match(flow, /`activity_reset` whenever pane\/transcript\/acceptance output changes/i);
+    assert.match(flow, /`idle_timeout` only after continuous inactivity/i);
+    assert.match(flow, /`max_timeout` after the total budget/i);
+    assert.match(flow, /one bounded replacement reviewer after evidence recheck/i);
+  });
+
+  it('keeps acceptance and final review read-only with leader-owned mutation', () => {
+    assert.match(skill, /leader\/main thread is the only writer for code, `ralpha_state`, the workboard, and the rounds ledger/i);
+    assert.match(skill, /Acceptance subagents must not edit code/i);
+    assert.match(skill, /Subagents must not call `ralpha_state write`, `ralpha_state clear`, `state_write`, edit code, or edit `.codex\/oh-my-ralpha\/working-model\/\*\*`/i);
+    assert.match(skill, /Red line: subagents are append-only for workflow information/i);
+    assert.match(skill, /Subagents may only add information via `ralpha verdict <slice> <role> <PASS\|CHANGES\|REJECT\|COMMENT> "summary"`/i);
+    assert.match(skill, /this append-only evidence is not a state transition until the leader applies it/i);
+    assert.match(skill, /explicit mutation lane, separate from reviewer-only acceptance/i);
+    assert.match(skill, /State write\/clear tools require `actorRole: "leader"` plus `mutationReason`/i);
+    assert.match(skill, /current_phase: "awaiting_user"` is rejected unless the reason clearly names the real user input\/decision needed/i);
+    assert.match(skill, /Final acceptance is read-only/i);
+    assert.match(skill, /Final reviewer-only acceptance/i);
+    assert.match(skill, /happened after the latest mutating cleanup plus regression proof/i);
+    assert.match(skill, /Do not edit files\. Do not write or clear ralpha_state/i);
+    assert.match(skill, /Do not use it for subagent timeouts, subagent capacity limits, or background acceptance waits/i);
+    assert.match(flow, /Only the leader\/main thread writes code, `ralpha_state`, the workboard, and the rounds ledger/i);
+    assert.match(flow, /Subagents are append-only for workflow information[\s\S]*`ralpha verdict <slice> <role> <PASS\|CHANGES\|REJECT\|COMMENT> "summary"`/i);
+    assert.match(flow, /Final acceptance happens after the latest mutating cleanup plus regression proof, and it stays read-only/i);
+    for (const prompt of [architectPrompt, codeReviewerPrompt]) {
+      assert.match(prompt, /Never call `ralpha_state write`, `ralpha_state clear`/);
+      assert.match(prompt, /Never edit `.codex\/oh-my-ralpha\/working-model\/\*\*`/);
+      assert.match(prompt, /only add workflow information through `ralpha verdict <slice> <role> <PASS\|CHANGES\|REJECT\|COMMENT> "summary"`/i);
+    }
+    assert.match(codeSimplifierPrompt, /Review-Only Default/i);
+    assert.match(codeSimplifierPrompt, /`WRITE_MODE_ALLOWED`/);
+    assert.match(codeSimplifierPrompt, /Unauthorized edits/i);
   });
 
   it('documents bundled companion capabilities', () => {
     assert.match(skill, /Bundled companions are installed by `setup` from this package/i);
     assert.match(skill, /`uninstall` removes those bundled companions/i);
     assert.match(skill, /role prompts\/native agents: `architect`, `code-reviewer`, `code-simplifier`/i);
+    assert.match(skill, /`architect=high`, `code-reviewer=medium`, `code-simplifier=medium`/i);
+    assert.match(flow, /lowers code-reviewer and code-simplifier to medium effort/i);
     assert.match(skill, /skills: `ai-slop-cleaner`/i);
+    assert.match(skill, /tmux-cli-agent-harness/i);
+  });
+
+  it('bundles tmux-cli-agent-harness with the ralpha integration profile', () => {
+    assert.match(tmuxHarnessSkill, /^name:\s+tmux-cli-agent-harness$/m);
+    assert.match(tmuxHarnessSkill, /Ralpha Integration Profile/);
+    assert.match(tmuxHarnessSkill, /Do not introduce a mailbox for ralpha v1/i);
+    assert.match(tmuxHarnessSkill, /ralpha-<slice>-<role>-<shortid>/);
+    assert.match(tmuxHarnessSkill, /ralpha_acceptance submit/i);
+    assert.match(tmuxHarnessSkill, /ralpha_trace append/i);
+    assert.match(tmuxHarnessSkill, /ralpha acceptance wait --slice <id> --role <role> --tmux <target> --log <path>/i);
+    assert.match(tmuxHarnessSkill, /Treat `accepted`[\s\S]*`blocked`[\s\S]*`activity_reset`[\s\S]*`idle_timeout`[\s\S]*`max_timeout`/i);
+    assert.match(tmuxHarnessSkill, /Readonly: do not edit files/i);
+    assert.match(tmuxHarnessControl, /Ralpha Reviewer Handoff/);
+    assert.match(tmuxHarnessControl, /Do not add mailbox files in ralpha v1/i);
+    assert.match(tmuxHarnessControl, /resets idle timeout/i);
+    assert.match(tmuxHarnessControl, /raw carriage\s+return/i);
+    assert.match(tmuxHarnessControl, /named buffers/i);
+    assert.match(tmuxHarnessPrompts, /ralpha_reviewer_acceptance_writeback/);
+    assert.match(tmuxHarnessPrompts, /ralpha_timeout_recovery_without_mailbox/);
+    assert.match(tmuxHarnessPrompts, /ralpha_inspectable_codex_reviewers_submit/);
+    assert.match(tmuxHarnessPrompts, /resets idle timeout/i);
+  });
+
+  it('keeps the docker sandbox ready for tmux harness smoke tests', () => {
+    assert.match(dockerfile, /\btmux\s*\\/);
+    assert.match(dockerfile, /tmux -V/);
+    assert.match(dockerShell, /--tmpfs', '\/root\/\.codex:mode=700,exec'/);
+  });
+
+  it('documents route-ready plain Codex team smoke artifacts', () => {
+    assert.match(readme, /Plain Codex native-subagent team smoke/);
+    assert.match(readme, /src\/planning\.mjs/);
+    assert.match(readme, /planningArtifactsComplete:false/);
+    assert.match(readme, /Task statement:/);
+    assert.match(readme, /Desired outcome:/);
+    assert.match(readme, /Known facts\/evidence:/);
+    assert.match(readme, /Likely codebase touchpoints:/);
+    assert.match(readme, /`implementation overview`:/);
+    assert.match(readme, /Interfaces \/ APIs \/ Schemas \/ I\/O/);
+    assert.match(readme, /Narrow Proof/);
+    assert.match(readme, /force: \$ralpha update \/tmp\/ralpha-subagent-team-smoke/);
+    assert.match(readme, /finalSkill:"ralpha" and phase:"execution"/);
+  });
+
+  it('documents inspectable tmux-backed Codex reviewer smoke', () => {
+    assert.match(readme, /Inspectable tmux-backed Codex reviewer smoke/);
+    assert.match(readme, /If the result shows[\s\S]*`Spawned \.\.\. \[architect\]`[\s\S]*native\s+subagent mode/i);
+    assert.match(readme, /ralpha-CODEX-architect/);
+    assert.match(readme, /ralpha-CODEX-code-reviewer/);
+    assert.match(readme, /Do not paste both panes in parallel/i);
+    assert.match(readme, /named buffers/i);
+    assert.match(readme, /raw carriage return/i);
+    assert.match(readme, /printf '\\r' \| tmux load-buffer -b submit_architect -/);
+    assert.match(readme, /summarizeAcceptance[\s\S]*hasBlocking:false/i);
   });
 
   it('documents Codex Plan-mode implementation handoff without broadening public keywords', () => {
@@ -110,10 +253,13 @@ describe('oh-my-ralpha skill contract', () => {
   it('documents the built-in JS runtime and fallback model', () => {
     assert.match(skill, /Standalone_Runtime/);
     assert.match(skill, /ralpha state read/i);
+    assert.match(skill, /ralpha verdict P0-02 architect PASS/i);
+    assert.match(skill, /ralpha verdict P0-02 code-reviewer CHANGES/i);
     assert.match(skill, /ralpha doctor/i);
     assert.match(skill, /node bin\/oh-my-ralpha\.js/i);
     assert.match(skill, /planning phase/i);
     assert.match(skill, /degraded mode/i);
+    assert.match(flow, /verdict evidence command/i);
     assert.match(flow, /Built-in runtime support/i);
   });
 });

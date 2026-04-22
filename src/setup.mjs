@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import {
   COMPANION_AGENT_PROMPTS,
@@ -143,13 +143,29 @@ async function installBundledCompanions({ codexHome, runtimeRoot, scope = 'user'
 
     if (force || !existsSync(targetSkillDir)) {
       await rm(targetSkillDir, { recursive: true, force: true });
-      await mkdir(targetSkillDir, { recursive: true });
-      await copyFile(sourceSkillPath, targetSkillPath);
+      await copyBundledCompanionSkill({ sourceSkillDir, targetSkillDir });
     }
     summary.skills.push({ id: capability.id, installed: true, skillPath: targetSkillPath });
   }
 
   return summary;
+}
+
+async function copyBundledCompanionSkill({ sourceSkillDir, targetSkillDir }) {
+  await mkdir(targetSkillDir, { recursive: true });
+  await copyFile(
+    join(sourceSkillDir, BUNDLED_COMPANION_SKILL_FILE),
+    join(targetSkillDir, 'SKILL.md'),
+  );
+
+  for (const entry of await readdir(sourceSkillDir, { withFileTypes: true })) {
+    if (entry.name === BUNDLED_COMPANION_SKILL_FILE) continue;
+    await cp(
+      join(sourceSkillDir, entry.name),
+      join(targetSkillDir, entry.name),
+      { recursive: true, force: true },
+    );
+  }
 }
 
 async function removeFileIfMatches(path, expectedContent) {
