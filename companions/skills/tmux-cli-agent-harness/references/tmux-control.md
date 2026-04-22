@@ -214,6 +214,11 @@ Use the target tool's visible/documented quit flow when known:
 
 If the session is intentionally left open, report why and provide `tmux attach -t <session>`. If cleanup is expected, verify `tmux has-session -t <session>` no longer finds it.
 
+For inspectable ralpha Codex reviewer sessions left open for human inspection,
+the final report must include both attach and cleanup commands. Once inspection
+is complete, run `tmux kill-session -t <session>` for each reviewer and then
+`tmux list-sessions` to prove no reviewer sessions were left behind.
+
 ## Interactive Keys
 
 ```bash

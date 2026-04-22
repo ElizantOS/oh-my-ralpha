@@ -239,6 +239,10 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(readme, /raw carriage return/i);
     assert.match(readme, /printf '\\r' \| tmux load-buffer -b submit_architect -/);
     assert.match(readme, /summarizeAcceptance[\s\S]*hasBlocking:false/i);
+    assert.match(readme, /After the human confirms inspection is complete[\s\S]*tmux kill-session -t ralpha-CODEX-architect/i);
+    assert.match(readme, /Do not silently leave reviewer tmux sessions running/i);
+    assert.match(tmuxHarnessSkill, /final report[\s\S]*cleanup commands/i);
+    assert.match(tmuxHarnessControl, /final report must include both attach and cleanup commands/i);
   });
 
   it('documents Codex Plan-mode implementation handoff without broadening public keywords', () => {

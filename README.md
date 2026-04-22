@@ -556,6 +556,18 @@ Passing evidence for this tmux-backed mode:
   `PASS` for `code-reviewer`
 - `summarizeAcceptance` for the two roles reports `hasBlocking:false`
 
+If the sessions were left open for inspection, the final report must say so and
+must include cleanup commands. After the human confirms inspection is complete,
+clean up the reviewer sessions explicitly:
+
+```bash
+docker exec -it oh-my-ralpha-codex-shell tmux kill-session -t ralpha-CODEX-architect
+docker exec -it oh-my-ralpha-codex-shell tmux kill-session -t ralpha-CODEX-code-reviewer
+docker exec -it oh-my-ralpha-codex-shell tmux list-sessions
+```
+
+Do not silently leave reviewer tmux sessions running after inspection is done.
+
 ### 5. Independent inspector tmux
 
 After a plain Codex/team smoke, open a second tmux session to inspect the first

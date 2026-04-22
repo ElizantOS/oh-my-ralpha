@@ -85,7 +85,10 @@ Cleanup: capture final pane, stop transcript, then kill session unless debugging
 For inspectable Codex reviewers, do not use native subagents. Create one tmux
 session per reviewer, launch plain `codex --no-alt-screen`, paste the
 role-specific prompt with a named buffer, submit with raw carriage return, and
-leave the session attachable until the human has inspected it.
+leave the session attachable until the human has inspected it. The final report
+must list every session intentionally left open and the exact cleanup commands;
+after inspection is complete, kill the reviewer sessions and verify they are
+gone with `tmux list-sessions`.
 
 Ralpha evidence packet returned to the leader:
 
