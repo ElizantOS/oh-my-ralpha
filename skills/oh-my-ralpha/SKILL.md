@@ -260,6 +260,7 @@ If a companion is missing from the target Codex home, `doctor` reports the fallb
 - `architect` / `code-reviewer` / `code-simplifier` -> proceed with the leader's best grounded manual pass and record the missing capability in rounds/trace before continuing
 - `ai-slop-cleaner` -> proceed in degraded mode with a manual cleanup checklist and record the missing capability in rounds/trace before continuing
 - Native Codex integration is available through `setup`, which installs the skill, writes `.codex/config.toml`, and registers native hook wrappers in `.codex/hooks.json`
+- Native Codex Plan-mode implementation handoff is supported as a hook bridge: exact UI handoff prompts such as `Implement the plan.` or `实施计划` are not public keywords, but `UserPromptSubmit` may activate ralpha execution and instruct the leader to sync the latest Plan-mode report into working-model artifacts before editing code.
 - The same `setup` step now registers one built-in MCP server, `ralpha`, with grouped tool surfaces:
   - `ralpha_state`
   - `ralpha_trace`

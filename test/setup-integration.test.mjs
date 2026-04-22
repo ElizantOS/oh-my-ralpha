@@ -264,6 +264,60 @@ describe('oh-my-ralpha setup integration', () => {
     assert.equal(output.continue, undefined);
   });
 
+  it('activates ralpha for Codex Plan implementation handoff prompts', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-plan-handoff-');
+    const output = await dispatchNativeHook({
+      hook_event_name: 'UserPromptSubmit',
+      cwd,
+      session_id: 'sess-plan-handoff',
+      thread_id: 'thread-plan-handoff',
+      turn_id: 'turn-plan-handoff',
+      prompt: 'Implement the plan.',
+    });
+
+    assert.equal(output.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
+    assert.match(output.hookSpecificOutput.additionalContext, /Codex Plan implementation handoff detected/i);
+    assert.match(output.hookSpecificOutput.additionalContext, /ralpha mode state has been activated/i);
+    assert.match(output.hookSpecificOutput.additionalContext, /not a public natural-language keyword/i);
+
+    const state = JSON.parse(await readFile(
+      join(cwd, '.codex', 'oh-my-ralpha', 'working-model', 'state', 'sessions', 'sess-plan-handoff', 'ralpha-state.json'),
+      'utf-8',
+    ));
+    assert.equal(state.active, true);
+    assert.equal(state.current_phase, 'starting');
+
+    const skillState = JSON.parse(await readFile(
+      join(cwd, '.codex', 'oh-my-ralpha', 'working-model', 'state', 'sessions', 'sess-plan-handoff', 'skill-active-state.json'),
+      'utf-8',
+    ));
+    assert.equal(skillState.skill, 'ralpha');
+    assert.equal(skillState.keyword, 'codex-plan-implementation');
+    assert.equal(skillState.source, 'oh-my-ralpha-plan-implementation-bridge');
+  });
+
+  it('activates ralpha for localized Codex Plan implementation handoff prompts', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-plan-handoff-cn-');
+    const output = await dispatchNativeHook({
+      hook_event_name: 'UserPromptSubmit',
+      cwd,
+      session_id: 'sess-plan-handoff-cn',
+      prompt: '实施计划',
+    });
+
+    assert.match(output.hookSpecificOutput.additionalContext, /Codex Plan implementation handoff detected/i);
+    assert.equal(existsSync(join(
+      cwd,
+      '.codex',
+      'oh-my-ralpha',
+      'working-model',
+      'state',
+      'sessions',
+      'sess-plan-handoff-cn',
+      'ralpha-state.json',
+    )), true);
+  });
+
   it('injects the interruption protocol for active ralpha work without $ralpha', async () => {
     const cwd = await makeTempWorkspace('oh-my-ralpha-active-interrupt-');
     await writeModeState({

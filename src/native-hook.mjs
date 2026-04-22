@@ -2,8 +2,19 @@ import { mkdir } from 'node:fs/promises';
 import { initWorkspace } from './init.mjs';
 import { readPlanningArtifacts, scaffoldPlan } from './planning.mjs';
 import { workingModelContextDir, workingModelPlansDir, workingModelStateDir } from './paths.mjs';
-import { routePrompt } from './router.mjs';
+import { recordSkillActivation, routePrompt } from './router.mjs';
 import { readModeState } from './state.mjs';
+
+const PLAN_IMPLEMENTATION_HANDOFF_PATTERNS = [
+  /^implement (?:the|this) plan\.?$/i,
+  /^execute (?:the|this) plan\.?$/i,
+  /^apply (?:the|this) plan\.?$/i,
+  /^yes,?\s+implement (?:the|this) plan\.?$/i,
+  /^实施计划[。.!！]?$/u,
+  /^执行计划[。.!！]?$/u,
+  /^开始实施计划[。.!！]?$/u,
+  /^开始执行计划[。.!！]?$/u,
+];
 
 function safeString(value) {
   return typeof value === 'string' ? value : '';
@@ -24,6 +35,16 @@ function readPromptText(payload) {
     if (value) return value;
   }
   return '';
+}
+
+function normalizePromptText(value) {
+  return safeString(value).trim().replace(/\s+/g, ' ');
+}
+
+function isPlanImplementationHandoffPrompt(text) {
+  const normalized = normalizePromptText(text);
+  if (!normalized) return false;
+  return PLAN_IMPLEMENTATION_HANDOFF_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
 function readSessionId(payload) {
@@ -135,6 +156,53 @@ function planningContext(result, ensuredPlanning) {
   return lines.join('\n');
 }
 
+function planImplementationHandoffContext(artifacts) {
+  const status = artifacts?.status;
+  const lines = [
+    'Codex Plan implementation handoff detected. Treat this as explicit approval to enter ralpha execution; ralpha mode state has been activated by the native hook.',
+    'Before editing product code, sync the latest Plan-mode report from conversation into .codex/oh-my-ralpha/working-model context/todo/rounds artifacts when they are missing or incomplete.',
+    'Then continue one active slice at a time with ralpha gates: fresh proof, bounded reviewer-only acceptance when warranted, final deslop, post-deslop regression, and artifact sync.',
+    'This handoff is a native hook bridge for the Codex Plan button, not a public natural-language keyword.',
+  ];
+
+  if (status) {
+    lines.push('Planning artifact status at handoff:');
+    lines.push(artifactStatusLine('context', status.context));
+    lines.push(artifactStatusLine('todo', status.todo));
+    lines.push(artifactStatusLine('rounds', status.rounds));
+    lines.push(artifactStatusLine('PRD', status.prd));
+    lines.push(artifactStatusLine('test spec', status.testSpec));
+  }
+
+  return lines.join('\n');
+}
+
+async function activatePlanImplementationHandoff({
+  cwd,
+  text,
+  sessionId,
+  threadId,
+  turnId,
+}) {
+  const artifacts = await readPlanningArtifacts(cwd);
+  const activation = await recordSkillActivation({
+    cwd,
+    text,
+    sessionId,
+    threadId,
+    turnId,
+    phase: 'execution',
+    source: 'oh-my-ralpha-plan-implementation-bridge',
+    matchOverride: {
+      keyword: 'codex-plan-implementation',
+      skill: 'ralpha',
+      priority: 8,
+    },
+  });
+
+  return { artifacts, activation };
+}
+
 function userInterruptionContext({ state, scope }) {
   const current = readResumeTarget(state) || 'unknown';
   return [
@@ -196,6 +264,17 @@ async function buildPromptSubmitOutput(payload, cwd) {
     const { state, scope } = await readRalphaModeState(payload, cwd);
     if (state?.active === true) {
       messages.push(userInterruptionContext({ state, scope }));
+    } else if (isPlanImplementationHandoffPrompt(text)) {
+      const handoff = await activatePlanImplementationHandoff({
+        cwd,
+        text,
+        sessionId,
+        threadId,
+        turnId,
+      });
+      if (handoff.activation) {
+        messages.push(planImplementationHandoffContext(handoff.artifacts));
+      }
     }
   }
 

@@ -71,5 +71,6 @@ This standalone package ships JS fallbacks for the Codex integration surfaces th
 - trace append/show
 - route activation
 - workflow route/init/plan/interview
+- Codex Plan-mode implementation handoff bridge for exact UI prompts such as `Implement the plan.` / `实施计划`; this bridge activates ralpha from the native hook without making those phrases public keywords
 
 That means a fresh Codex can use the repository with only the local `.codex/oh-my-ralpha/working-model` files and the built-in runtime.

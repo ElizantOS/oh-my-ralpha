@@ -27,6 +27,8 @@ describe('oh-my-ralpha keyword surface', () => {
     assert.equal(detectImplicitTrigger('我们继续处理这个 backlog'), null);
     assert.equal(detectImplicitTrigger('finish the remaining work'), null);
     assert.equal(detectImplicitTrigger('ralpha keep going on the backlog'), null);
+    assert.equal(detectImplicitTrigger('Implement the plan.'), null);
+    assert.equal(detectImplicitTrigger('实施计划'), null);
   });
 
   it('does not route package-name mentions', () => {

@@ -98,6 +98,15 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(skill, /skills: `ai-slop-cleaner`/i);
   });
 
+  it('documents Codex Plan-mode implementation handoff without broadening public keywords', () => {
+    assert.match(skill, /Codex Plan-mode implementation handoff/i);
+    assert.match(skill, /`Implement the plan\.` or `实施计划` are not public keywords/i);
+    assert.match(skill, /activate ralpha execution/i);
+    assert.match(skill, /sync the latest Plan-mode report into working-model artifacts before editing code/i);
+    assert.match(flow, /Codex Plan-mode implementation handoff bridge/i);
+    assert.match(flow, /without making those phrases public keywords/i);
+  });
+
   it('documents the built-in JS runtime and fallback model', () => {
     assert.match(skill, /Standalone_Runtime/);
     assert.match(skill, /ralpha state read/i);

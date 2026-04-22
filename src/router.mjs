@@ -20,9 +20,11 @@ export async function recordSkillActivation({
   threadId,
   turnId,
   phase = 'execution',
+  matchOverride,
+  source = 'oh-my-ralpha-router',
   nowIso = new Date().toISOString(),
 }) {
-  const match = detectPrimaryKeyword(text);
+  const match = matchOverride ?? detectPrimaryKeyword(text);
   if (!match) return null;
 
   const state = {
@@ -33,7 +35,7 @@ export async function recordSkillActivation({
     phase,
     activated_at: nowIso,
     updated_at: nowIso,
-    source: 'oh-my-ralpha-router',
+    source,
     session_id: sessionId,
     thread_id: threadId,
     turn_id: turnId,
