@@ -10,6 +10,8 @@ const BLOCKED_STATE_MUTATION_ROLES = new Set([
   'code_reviewer',
   'code-simplifier',
   'code_simplifier',
+  'workflow-auditor',
+  'workflow_auditor',
   'reviewer',
   'simplifier',
   'subagent',
@@ -54,7 +56,7 @@ function readAwaitingUserReason(patch, mutationReason) {
 function isSubagentWaitReason(reason) {
   const text = safeText(reason);
   if (!text) return false;
-  const namesSubagentWork = /sub-?agent|native agent|acceptance agent|architect|code-reviewer|code-simplifier|reviewer|simplifier/i.test(text);
+  const namesSubagentWork = /sub-?agent|native agent|acceptance agent|architect|code-reviewer|code-simplifier|workflow-auditor|reviewer|simplifier|auditor/i.test(text);
   const namesWaiting = /wait|waiting|await|pending|timeout|timed out|capacity|limit|cap|等|等待|超时|上限/i.test(text);
   const namesUserDecision = /user.*(decision|input|approval|clarification)|human.*(decision|input|approval|clarification)|(decision|input|approval|clarification).*user|用户|人工|确认|澄清/i.test(text);
   return namesSubagentWork && namesWaiting && !namesUserDecision;

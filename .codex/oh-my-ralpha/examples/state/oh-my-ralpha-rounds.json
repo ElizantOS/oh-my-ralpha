@@ -12,7 +12,13 @@
     "skill_validation": "validateSkillFile('./skills/oh-my-ralpha/SKILL.md') -> repo-skill-ok",
     "runtime_assertions": "detectKeywords('$ralpha continue the backlog') resolves to ralpha; natural-language continuation phrases do not activate without explicit $ralpha intent",
     "architect_verdict": "PASS for packaging readiness",
-    "reviewer_verdict": "No findings. Ready for packaging."
+    "reviewer_verdict": "No findings. Ready for packaging.",
+    "workflow_auditor_verdict": "PASS for workboard, rounds, acceptance evidence, and final state consistency"
+  },
+  "final_closeout_acceptance": {
+    "slice_id": "FINAL-CLOSEOUT",
+    "required_roles": ["architect", "code-reviewer", "code-simplifier", "workflow-auditor"],
+    "latest_verdict": "PASS"
   },
   "remaining_todos": [],
   "done_when": [

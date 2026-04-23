@@ -9,9 +9,37 @@ import { runtimeRootFromModule } from '../src/paths.mjs';
 import { setupCodexIntegration, uninstallCodexIntegration } from '../src/setup.mjs';
 import { dispatchNativeHook } from '../src/native-hook.mjs';
 import { writeModeState } from '../src/state.mjs';
+import { submitAcceptance } from '../src/acceptance.mjs';
 
 function makeTempWorkspace(prefix) {
   return mkdtemp(join(tmpdir(), prefix));
+}
+
+async function writeStopHookArtifacts(cwd, { open = false } = {}) {
+  const stateDir = join(cwd, '.codex', 'oh-my-ralpha', 'working-model', 'state');
+  await mkdir(stateDir, { recursive: true });
+  await writeFile(join(stateDir, 'sample-todo.md'), `# sample TODO
+
+## \`P0-01\`
+- \`title\`: Sample slice
+- \`priority\`: P0
+- \`status\`: ${open ? 'pending' : 'completed'}
+- \`implementation overview\`: Sample implementation.
+- \`acceptance\`: Sample acceptance.
+- \`evidence\`: Sample evidence.
+`, 'utf-8');
+  await writeFile(join(stateDir, 'sample-rounds.json'), JSON.stringify({
+    task: 'sample',
+    current_iteration: 1,
+    max_iterations: 40,
+    current_focus: open ? 'P0-01 remains' : 'Complete',
+    completed_todos: open ? [] : ['P0-01'],
+    next_todo: open ? 'P0-01' : null,
+    blocked_todos: [],
+    verification_evidence: {},
+    remaining_todos: open ? ['P0-01'] : [],
+    final_verdict: open ? undefined : 'PENDING_FINAL_CLOSEOUT',
+  }, null, 2) + '\n', 'utf-8');
 }
 
 describe('oh-my-ralpha setup integration', () => {
@@ -78,6 +106,8 @@ describe('oh-my-ralpha setup integration', () => {
     assert.equal(existsSync(join(codexHome, 'agents', 'code-reviewer.toml')), false);
     assert.equal(existsSync(join(codexHome, 'prompts', 'code-simplifier.md')), false);
     assert.equal(existsSync(join(codexHome, 'agents', 'code-simplifier.toml')), false);
+    assert.equal(existsSync(join(codexHome, 'prompts', 'workflow-auditor.md')), false);
+    assert.equal(existsSync(join(codexHome, 'agents', 'workflow-auditor.toml')), false);
     assert.equal(existsSync(join(codexHome, 'skills', 'ai-slop-cleaner')), false);
     assert.equal(uninstallResult.companions.prompts.every((entry) => entry.removed), true);
     assert.equal(uninstallResult.companions.skills.every((entry) => entry.removed), true);
@@ -95,6 +125,8 @@ describe('oh-my-ralpha setup integration', () => {
     await mkdir(userHarnessDir, { recursive: true });
     await writeFile(join(codexHome, 'prompts', 'architect.md'), '# user architect prompt\n', 'utf-8');
     await writeFile(join(codexHome, 'agents', 'architect.toml'), 'name = "architect"\n# user agent\n', 'utf-8');
+    await writeFile(join(codexHome, 'prompts', 'workflow-auditor.md'), '# user workflow auditor prompt\n', 'utf-8');
+    await writeFile(join(codexHome, 'agents', 'workflow-auditor.toml'), 'name = "workflow-auditor"\n# user agent\n', 'utf-8');
     await writeFile(join(userSkillDir, 'SKILL.md'), '---\nname: ai-slop-cleaner\ndescription: user copy\n---\n', 'utf-8');
     await writeFile(join(userHarnessDir, 'SKILL.md'), '---\nname: tmux-cli-agent-harness\ndescription: user copy\n---\n', 'utf-8');
 
@@ -108,9 +140,12 @@ describe('oh-my-ralpha setup integration', () => {
 
     assert.equal(await readFile(join(codexHome, 'prompts', 'architect.md'), 'utf-8'), '# user architect prompt\n');
     assert.equal(await readFile(join(codexHome, 'agents', 'architect.toml'), 'utf-8'), 'name = "architect"\n# user agent\n');
+    assert.equal(await readFile(join(codexHome, 'prompts', 'workflow-auditor.md'), 'utf-8'), '# user workflow auditor prompt\n');
+    assert.equal(await readFile(join(codexHome, 'agents', 'workflow-auditor.toml'), 'utf-8'), 'name = "workflow-auditor"\n# user agent\n');
     assert.equal(await readFile(join(userSkillDir, 'SKILL.md'), 'utf-8'), '---\nname: ai-slop-cleaner\ndescription: user copy\n---\n');
     assert.equal(await readFile(join(userHarnessDir, 'SKILL.md'), 'utf-8'), '---\nname: tmux-cli-agent-harness\ndescription: user copy\n---\n');
     assert.equal(result.companions.prompts.find((entry) => entry.id === 'architect').removed, false);
+    assert.equal(result.companions.prompts.find((entry) => entry.id === 'workflow-auditor').removed, false);
     assert.equal(result.companions.skills.find((entry) => entry.id === 'ai-slop-cleaner').removed, false);
     assert.equal(result.companions.skills.find((entry) => entry.id === 'tmux-cli-agent-harness').removed, false);
   });
@@ -191,6 +226,8 @@ describe('oh-my-ralpha setup integration', () => {
     assert.equal(existsSync(join(codexHome, 'agents', 'code-reviewer.toml')), true);
     assert.equal(existsSync(join(codexHome, 'prompts', 'code-simplifier.md')), true);
     assert.equal(existsSync(join(codexHome, 'agents', 'code-simplifier.toml')), true);
+    assert.equal(existsSync(join(codexHome, 'prompts', 'workflow-auditor.md')), true);
+    assert.equal(existsSync(join(codexHome, 'agents', 'workflow-auditor.toml')), true);
     assert.equal(existsSync(join(codexHome, 'skills', 'ai-slop-cleaner', 'SKILL.md')), true);
     assert.equal(existsSync(join(codexHome, 'skills', 'tmux-cli-agent-harness', 'SKILL.md')), true);
     assert.equal(existsSync(join(codexHome, 'skills', 'tmux-cli-agent-harness', 'references', 'tmux-control.md')), true);
@@ -206,22 +243,29 @@ describe('oh-my-ralpha setup integration', () => {
     const architectAgent = await readFile(join(codexHome, 'agents', 'architect.toml'), 'utf-8');
     const codeReviewerAgent = await readFile(join(codexHome, 'agents', 'code-reviewer.toml'), 'utf-8');
     const codeSimplifierAgent = await readFile(join(codexHome, 'agents', 'code-simplifier.toml'), 'utf-8');
+    const workflowAuditorAgent = await readFile(join(codexHome, 'agents', 'workflow-auditor.toml'), 'utf-8');
     assert.match(architectAgent, /name = "architect"/);
     assert.match(architectAgent, /model_reasoning_effort = "high"/);
     assert.match(architectAgent, /You are Architect/);
     assert.doesNotMatch(architectAgent, /developer_instructions = """\n---/);
     assert.match(codeReviewerAgent, /model_reasoning_effort = "medium"/);
     assert.match(codeSimplifierAgent, /model_reasoning_effort = "medium"/);
+    assert.match(workflowAuditorAgent, /name = "workflow-auditor"/);
+    assert.match(workflowAuditorAgent, /model_reasoning_effort = "high"/);
+    assert.match(workflowAuditorAgent, /You are Workflow Auditor/);
     assert.match(codeReviewerAgent, /Never call `ralpha_state write`/);
     assert.match(codeSimplifierAgent, /Review-Only Default/);
     assert.match(codeSimplifierAgent, /`WRITE_MODE_ALLOWED`/);
 
     const report = doctorReport({ runtimeRoot, codexHome });
     const architect = report.companions.find((entry) => entry.id === 'architect');
+    const workflowAuditor = report.companions.find((entry) => entry.id === 'workflow-auditor');
     const slopCleaner = report.companions.find((entry) => entry.id === 'ai-slop-cleaner');
     const tmuxHarness = report.companions.find((entry) => entry.id === 'tmux-cli-agent-harness');
     assert.equal(architect.installed, true);
     assert.equal(architect.source, 'bundled-agent-prompt');
+    assert.equal(workflowAuditor.installed, true);
+    assert.equal(workflowAuditor.source, 'bundled-agent-prompt');
     assert.equal(slopCleaner.installed, true);
     assert.equal(slopCleaner.source, 'bundled-skill');
     assert.equal(tmuxHarness.installed, true);
@@ -411,6 +455,84 @@ describe('oh-my-ralpha setup integration', () => {
       session_id: 'sess-stop',
     });
     assert.equal(allowed, null);
+  });
+
+  it('keeps ordinary Stop blocking when artifacts still have open TODO work', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-open-work-');
+    await writeStopHookArtifacts(cwd, { open: true });
+    await writeModeState({
+      cwd,
+      mode: 'ralpha',
+      patch: {
+        active: true,
+        current_phase: 'executing',
+      },
+    });
+
+    const blocked = await dispatchNativeHook({
+      hook_event_name: 'Stop',
+      cwd,
+    });
+
+    assert.equal(blocked.decision, 'block');
+    assert.match(blocked.reason, /still active/i);
+    assert.doesNotMatch(blocked.reason, /FINAL-CLOSEOUT/);
+  });
+
+  it('routes completed artifacts with active state into final-closeout review', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-final-closeout-');
+    await writeStopHookArtifacts(cwd, { open: false });
+    await writeModeState({
+      cwd,
+      mode: 'ralpha',
+      patch: {
+        active: true,
+        current_phase: 'executing',
+      },
+    });
+
+    const blocked = await dispatchNativeHook({
+      hook_event_name: 'Stop',
+      cwd,
+    });
+
+    assert.equal(blocked.decision, 'block');
+    assert.match(blocked.reason, /final-closeout gate/i);
+    assert.match(blocked.reason, /FINAL-CLOSEOUT/);
+    assert.match(blocked.reason, /four independent read-only deep reviews/i);
+    assert.match(blocked.reason, /workflow-auditor/);
+  });
+
+  it('asks only for leader-owned state cleanup after final-closeout review passes', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-final-clear-');
+    await writeStopHookArtifacts(cwd, { open: false });
+    for (const role of ['architect', 'code-reviewer', 'code-simplifier', 'workflow-auditor']) {
+      await submitAcceptance({
+        cwd,
+        sliceId: 'FINAL-CLOSEOUT',
+        role,
+        verdict: 'PASS',
+        summary: `${role} accepted final closeout`,
+      });
+    }
+    await writeModeState({
+      cwd,
+      mode: 'ralpha',
+      patch: {
+        active: true,
+        current_phase: 'executing',
+      },
+    });
+
+    const blocked = await dispatchNativeHook({
+      hook_event_name: 'Stop',
+      cwd,
+    });
+
+    assert.equal(blocked.decision, 'block');
+    assert.match(blocked.reason, /already has four independent PASS verdicts/i);
+    assert.match(blocked.reason, /Do not rerun review or edit code/i);
+    assert.match(blocked.reason, /active:false,current_phase:"complete"/);
   });
 
   it('blocks paused state even with resume target', async () => {

@@ -10,6 +10,7 @@ const ACCEPTANCE_ROLES = new Set([
   'architect',
   'code-reviewer',
   'code-simplifier',
+  'workflow-auditor',
   'leader',
   'manual',
 ]);
@@ -21,7 +22,7 @@ const ACCEPTANCE_VERDICTS = new Set([
   'COMMENT',
 ]);
 
-const REVIEWER_ROLES = new Set([
+const DEFAULT_REVIEWER_ROLES = Object.freeze([
   'architect',
   'code-reviewer',
   'code-simplifier',
@@ -37,6 +38,17 @@ export const ACCEPTANCE_WAIT_DEFAULTS = Object.freeze({
   maxMs: 1_200_000,
   pollMs: 5_000,
 });
+
+export const FINAL_CLOSEOUT_SLICE_ID = 'FINAL-CLOSEOUT';
+
+export const FINAL_CLOSEOUT_ROLES = Object.freeze([
+  'architect',
+  'code-reviewer',
+  'code-simplifier',
+  'workflow-auditor',
+]);
+
+const REVIEW_LOOP_ESCALATION_BLOCKING_ROUNDS = 3;
 
 function normalizeText(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -60,8 +72,14 @@ function normalizeObject(value, fieldName) {
   return value;
 }
 
+function normalizeReviewRound(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number.parseInt(String(value), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 function normalizeRoles(roles) {
-  if (roles === undefined) return [...REVIEWER_ROLES];
+  if (roles === undefined) return [...DEFAULT_REVIEWER_ROLES];
   const values = Array.isArray(roles) ? roles : [roles];
   return values
     .flatMap((value) => String(value).split(','))
@@ -93,6 +111,9 @@ export async function submitAcceptance({
   findings,
   suggestedLedgerText,
   evidence,
+  reviewRound,
+  reviewLens,
+  reviewCycleId,
   nowIso = new Date().toISOString(),
 }) {
   const normalizedSliceId = normalizeText(sliceId);
@@ -107,6 +128,7 @@ export async function submitAcceptance({
   if (!ACCEPTANCE_VERDICTS.has(normalizedVerdict)) {
     throw new Error(`verdict must be one of: ${[...ACCEPTANCE_VERDICTS].join(', ')}`);
   }
+  const normalizedReviewRound = normalizeReviewRound(reviewRound);
 
   const acceptancePath = getAcceptancePath(cwd);
   await mkdir(workingModelStateDir(cwd), { recursive: true });
@@ -121,6 +143,9 @@ export async function submitAcceptance({
     findings: normalizeFindings(findings),
     suggested_ledger_text: normalizeText(suggestedLedgerText),
     evidence: normalizeObject(evidence, 'evidence'),
+    review_round: normalizedReviewRound,
+    review_lens: normalizeText(reviewLens),
+    review_cycle_id: normalizeText(reviewCycleId),
     append_only: true,
   };
 
@@ -173,18 +198,65 @@ export function summarizeAcceptanceRecords(records, {
   const blockingRecords = latestReviewerRecords.filter((record) =>
     BLOCKING_REVIEWER_VERDICTS.has(normalizeText(record.verdict)),
   );
+  const reviewLoop = summarizeReviewLoop(reviewerRecords, blockingRecords);
 
   return {
     roles: [...reviewerRoles],
     latest_by_role: latestByRole,
     latest_reviewer_records: latestReviewerRecords,
     blocking_records: blockingRecords,
+    latest_blockers: blockingRecords,
+    review_loop: reviewLoop,
+    escalated_review_required: reviewLoop.escalated_review_required,
     has_reviewer_evidence: reviewerRecords.length > 0,
     has_blocking_reviewer_verdict: blockingRecords.length > 0,
     can_record_manual_pass: blockingRecords.length === 0,
     instruction: blockingRecords.length > 0
       ? 'Do not record leader/manual PASS or degraded acceptance. Fix or explicitly schedule the reviewer CHANGES/REJECT findings, rerun fresh proof, then repeat reviewer acceptance.'
       : 'No unresolved reviewer CHANGES/REJECT verdicts are present in the latest reviewer evidence for this slice.',
+  };
+}
+
+function summarizeReviewLoop(reviewerRecords, latestBlockingRecords) {
+  const blockingRecords = reviewerRecords.filter((record) =>
+    BLOCKING_REVIEWER_VERDICTS.has(normalizeText(record.verdict)),
+  );
+  const blockingRounds = [...new Set(
+    blockingRecords
+      .map((record) => normalizeReviewRound(record.review_round))
+      .filter((value) => Number.isInteger(value)),
+  )].sort((a, b) => a - b);
+  const reviewLenses = [...new Set(
+    reviewerRecords
+      .map((record) => normalizeText(record.review_lens))
+      .filter(Boolean),
+  )];
+  const reviewCycleIds = [...new Set(
+    reviewerRecords
+      .map((record) => normalizeText(record.review_cycle_id))
+      .filter(Boolean),
+  )];
+  const maxBlockingRound = blockingRounds.length > 0 ? blockingRounds.at(-1) : null;
+  const blockingRoundCount = blockingRounds.length;
+  const unresolvedBlockerExists = latestBlockingRecords.length > 0;
+  const escalatedReviewRequired = unresolvedBlockerExists
+    && (
+      (Number.isInteger(maxBlockingRound) && maxBlockingRound >= REVIEW_LOOP_ESCALATION_BLOCKING_ROUNDS)
+      || blockingRoundCount >= REVIEW_LOOP_ESCALATION_BLOCKING_ROUNDS
+    );
+
+  return {
+    blocking_rounds: blockingRounds,
+    blocking_round_count: blockingRoundCount,
+    latest_blockers: latestBlockingRecords,
+    max_blocking_review_round: maxBlockingRound,
+    escalation_threshold: REVIEW_LOOP_ESCALATION_BLOCKING_ROUNDS,
+    escalated_review_required: escalatedReviewRequired,
+    review_lenses: reviewLenses,
+    review_cycle_ids: reviewCycleIds,
+    instruction: escalatedReviewRequired
+      ? 'Three blocking review-fix rounds have not converged. Do not mark the TODO completed; escalate to architect, split a follow-up TODO, or explicitly record an accepted out-of-scope non-blocking item before continuing.'
+      : 'Review loop has not reached the escalation threshold for unresolved blocking findings.',
   };
 }
 

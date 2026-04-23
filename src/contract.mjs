@@ -9,6 +9,7 @@ export const RALPHA_TEAM_LANES = Object.freeze([
   'architect',
   'code-reviewer',
   'code-simplifier',
+  'workflow-auditor',
   'ai-slop-cleaner',
 ]);
 

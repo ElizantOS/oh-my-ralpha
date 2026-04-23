@@ -40,5 +40,13 @@ describe('oh-my-ralpha truth-source examples', () => {
     assert.match(roundsLedger.verification_evidence.runtime_assertions, /\$ralpha/);
     assert.match(roundsLedger.verification_evidence.runtime_assertions, /resolves to ralpha/);
     assert.match(roundsLedger.verification_evidence.runtime_assertions, /natural-language continuation phrases do not activate/);
+    assert.match(roundsLedger.verification_evidence.workflow_auditor_verdict, /PASS/);
+    assert.equal(roundsLedger.final_closeout_acceptance.slice_id, 'FINAL-CLOSEOUT');
+    assert.deepEqual(roundsLedger.final_closeout_acceptance.required_roles, [
+      'architect',
+      'code-reviewer',
+      'code-simplifier',
+      'workflow-auditor',
+    ]);
   });
 });

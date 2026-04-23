@@ -28,6 +28,10 @@ const codeSimplifierPrompt = readFileSync(
   join(process.cwd(), 'companions/prompts/code-simplifier.md'),
   'utf-8',
 );
+const workflowAuditorPrompt = readFileSync(
+  join(process.cwd(), 'companions/prompts/workflow-auditor.md'),
+  'utf-8',
+);
 const tmuxHarnessSkill = readFileSync(
   join(process.cwd(), 'companions/skills/tmux-cli-agent-harness/SKILL.bundle.md'),
   'utf-8',
@@ -111,6 +115,14 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(skill, /Default acceptance path: one `code-reviewer` pass/i);
     assert.match(skill, /Never launch all three acceptance lanes at once/i);
     assert.match(skill, /hard maximum is two active acceptance agents per slice/i);
+    assert.match(skill, /TODO review-fix convergence loop/i);
+    assert.match(skill, /three blocking review-fix rounds/i);
+    assert.match(skill, /original TODO diff[\s\S]*previous reviewer findings[\s\S]*fix diff[\s\S]*fresh proof/i);
+    assert.match(skill, /escalated_review/i);
+    assert.match(skill, /final-closeout gate/i);
+    assert.match(skill, /FINAL-CLOSEOUT/i);
+    assert.match(skill, /workflow-auditor/i);
+    assert.match(skill, /four independent read-only reviewers/i);
     assert.match(skill, /leader-owned manual acceptance pass/i);
     assert.match(skill, /Do not mark a slice `completed` until fresh evidence plus required native or degraded acceptance evidence is recorded/i);
     assert.match(skill, /degraded_missing_subagent_runtime/i);
@@ -138,9 +150,14 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(skill, /Blocker states such as acceptance timeouts/i);
     assert.match(skill, /active: true/);
     assert.match(skill, /active: false.*current_phase: "paused_after_\*"/);
+    assert.match(skill, /next_todo:null[\s\S]*remaining_todos:\[\]/i);
+    assert.match(skill, /mark state terminal and clear it, not rerun review or edit code/i);
     assert.match(skill, /does not replace per-slice fresh evidence[\s\S]*bounded reviewer-only `architect` \/ `code-reviewer` \/ `code-simplifier` acceptance[\s\S]*final deslop pass[\s\S]*post-deslop regression/i);
     assert.match(flow, /Stop protection is not verification/i);
     assert.match(flow, /Verification stays layered and bounded/i);
+    assert.match(flow, /Review-fix loops are capped at three blocking rounds/i);
+    assert.match(flow, /Final closeout is the only budget exception/i);
+    assert.match(flow, /workflow-auditor/i);
     assert.match(flow, /Timeout handling must consume append-only reviewer evidence before degrading/i);
     assert.match(flow, /Native wait timeouts are observation timeouts/i);
     assert.match(flow, /`activity_reset` whenever pane\/transcript\/acceptance output changes/i);
@@ -161,13 +178,13 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(skill, /current_phase: "awaiting_user"` is rejected unless the reason clearly names the real user input\/decision needed/i);
     assert.match(skill, /Final acceptance is read-only/i);
     assert.match(skill, /Final reviewer-only acceptance/i);
-    assert.match(skill, /happened after the latest mutating cleanup plus regression proof/i);
+    assert.match(skill, /Any `CHANGES` or `REJECT` from any final lane blocks state cleanup/i);
     assert.match(skill, /Do not edit files\. Do not write or clear ralpha_state/i);
     assert.match(skill, /Do not use it for subagent timeouts, subagent capacity limits, or background acceptance waits/i);
     assert.match(flow, /Only the leader\/main thread writes code, `ralpha_state`, the workboard, and the rounds ledger/i);
     assert.match(flow, /Subagents are append-only for workflow information[\s\S]*`ralpha verdict <slice> <role> <PASS\|CHANGES\|REJECT\|COMMENT> "summary"`/i);
     assert.match(flow, /Final acceptance happens after the latest mutating cleanup plus regression proof, and it stays read-only/i);
-    for (const prompt of [architectPrompt, codeReviewerPrompt]) {
+    for (const prompt of [architectPrompt, codeReviewerPrompt, workflowAuditorPrompt]) {
       assert.match(prompt, /Never call `ralpha_state write`, `ralpha_state clear`/);
       assert.match(prompt, /Never edit `.codex\/oh-my-ralpha\/working-model\/\*\*`/);
       assert.match(prompt, /only add workflow information through `ralpha verdict <slice> <role> <PASS\|CHANGES\|REJECT\|COMMENT> "summary"`/i);
@@ -175,14 +192,16 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(codeSimplifierPrompt, /Review-Only Default/i);
     assert.match(codeSimplifierPrompt, /`WRITE_MODE_ALLOWED`/);
     assert.match(codeSimplifierPrompt, /Unauthorized edits/i);
+    assert.match(workflowAuditorPrompt, /You are Workflow Auditor/i);
+    assert.match(workflowAuditorPrompt, /FINAL-CLOSEOUT/i);
   });
 
   it('documents bundled companion capabilities', () => {
     assert.match(skill, /Bundled companions are installed by `setup` from this package/i);
     assert.match(skill, /`uninstall` removes those bundled companions/i);
-    assert.match(skill, /role prompts\/native agents: `architect`, `code-reviewer`, `code-simplifier`/i);
-    assert.match(skill, /`architect=high`, `code-reviewer=medium`, `code-simplifier=medium`/i);
-    assert.match(flow, /lowers code-reviewer and code-simplifier to medium effort/i);
+    assert.match(skill, /role prompts\/native agents: `architect`, `code-reviewer`, `code-simplifier`, `workflow-auditor`/i);
+    assert.match(skill, /`architect=high`, `code-reviewer=medium`, `code-simplifier=medium`, `workflow-auditor=high`/i);
+    assert.match(flow, /workflow-auditor at high effort/i);
     assert.match(skill, /skills: `ai-slop-cleaner`/i);
     assert.match(skill, /tmux-cli-agent-harness/i);
   });
@@ -259,6 +278,9 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(skill, /ralpha state read/i);
     assert.match(skill, /ralpha verdict P0-02 architect PASS/i);
     assert.match(skill, /ralpha verdict P0-02 code-reviewer CHANGES/i);
+    assert.match(skill, /ralpha verdict FINAL-CLOSEOUT workflow-auditor PASS/i);
+    assert.match(skill, /--review-round 2 --review-lens edge\/state\/regression --review-cycle-id P0-02-loop/i);
+    assert.match(skill, /ralpha acceptance wait --slice FINAL-CLOSEOUT --roles architect,code-reviewer,code-simplifier,workflow-auditor/i);
     assert.match(skill, /ralpha doctor/i);
     assert.match(skill, /node bin\/oh-my-ralpha\.js/i);
     assert.match(skill, /planning phase/i);

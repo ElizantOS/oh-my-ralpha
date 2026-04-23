@@ -52,6 +52,7 @@ const ACCEPTANCE_ROLES = new Set([
   'architect',
   'code-reviewer',
   'code-simplifier',
+  'workflow-auditor',
   'leader',
   'manual',
 ]);
@@ -88,7 +89,7 @@ function parseVerdictCommand(positionals, options) {
     throw new Error('usage: ralpha verdict <slice> <role> <PASS|CHANGES|REJECT|COMMENT> "summary"');
   }
   if (!ACCEPTANCE_ROLES.has(String(role).toLowerCase())) {
-    throw new Error('role must be one of: architect, code-reviewer, code-simplifier, leader, manual');
+    throw new Error('role must be one of: architect, code-reviewer, code-simplifier, workflow-auditor, leader, manual');
   }
 
   const summary = optionString(options, 'summary') ?? positionals.slice(4).join(' ').trim();
@@ -101,6 +102,9 @@ function parseVerdictCommand(positionals, options) {
     findings: readJsonOption(options, 'findings'),
     evidence: readJsonOption(options, 'evidence'),
     suggestedLedgerText: optionString(options, 'suggested-ledger-text'),
+    reviewRound: optionString(options, 'review-round', 'reviewRound'),
+    reviewLens: optionString(options, 'review-lens', 'reviewLens'),
+    reviewCycleId: optionString(options, 'review-cycle-id', 'reviewCycleId'),
   };
 }
 

@@ -27,6 +27,14 @@ export const COMPANION_AGENT_PROMPTS = Object.freeze([
     description: 'Reviews recently modified code for simplification opportunities without editing by default',
     reasoningEffort: 'medium',
   },
+  {
+    id: 'workflow-auditor',
+    type: 'agent-prompt',
+    installName: 'workflow-auditor',
+    fallback: 'manual workflow artifact/state audit note in rounds/trace',
+    description: 'Audits ralpha workboard, rounds, acceptance evidence, state, and closeout consistency',
+    reasoningEffort: 'high',
+  },
 ]);
 
 export const OBSOLETE_COMPANION_AGENT_PROMPTS = Object.freeze([

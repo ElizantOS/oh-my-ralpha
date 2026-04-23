@@ -72,7 +72,7 @@ Session: ralpha-<slice>-<role>-<shortid>
 Attach: tmux attach -t <session>
 CWD: <repo>
 Slice: <slice id>
-Role: <architect|code-reviewer|code-simplifier>
+Role: <architect|code-reviewer|code-simplifier|workflow-auditor>
 Proof: <latest command and summarized output>
 Scope: <paths or behavior to review>
 Verdict command: ralpha verdict <slice> <role> <PASS|CHANGES|REJECT|COMMENT> "<summary>"

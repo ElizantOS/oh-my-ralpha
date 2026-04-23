@@ -108,15 +108,16 @@ The workflow-level execution lanes currently formalized by `oh-my-ralpha` are:
 - `architect`
 - `code-reviewer`
 - `code-simplifier`
+- `workflow-auditor`
 
-These are the native-subagent lanes `oh-my-ralpha` must spawn for every completed slice when the host runtime provides native subagents. Implementation itself stays with the main thread in this standalone package; the OMX `team-executor` role is not bundled because this repo does not ship the OMX team runtime.
+These are reviewer-only native-subagent lanes. Ordinary slices use a bounded subset after fresh proof; final closeout is the one heavy gate and requires four independent read-only `FINAL-CLOSEOUT` lanes: `architect`, `code-reviewer`, `code-simplifier`, and `workflow-auditor`. Implementation itself stays with the main thread in this standalone package; the OMX `team-executor` role is not bundled because this repo does not ship the OMX team runtime.
 
 They are bundled in this repository under `companions/prompts/` and installed by `setup` under the target Codex home's `prompts/` and `agents/` directories. The bundled companion skills are:
 
 - `ai-slop-cleaner`
 - `tmux-cli-agent-harness`
 
-The oh-my-ralpha MCP/CLI still stays narrow: it manages state, append-only acceptance evidence, trace, workflow scaffolding, admin, hooks, and setup. It does not expose separate CLI/MCP commands that execute `architect`, `code-reviewer`, or `code-simplifier`; those are installed for Codex's prompt/native-agent surfaces. Invoking `$ralpha` is an explicit request for the workflow's per-slice native-subagent acceptance contract. `ai-slop-cleaner` is installed as the final closeout cleanup skill, and `tmux-cli-agent-harness` is installed for inspectable reviewer/test/diagnostic sessions when native subagents are late, unavailable, or need pane history.
+The oh-my-ralpha MCP/CLI still stays narrow: it manages state, append-only acceptance evidence, trace, workflow scaffolding, admin, hooks, and setup. It does not expose separate CLI/MCP commands that execute `architect`, `code-reviewer`, `code-simplifier`, or `workflow-auditor`; those are installed for Codex's prompt/native-agent surfaces. Invoking `$ralpha` is an explicit request for the workflow's per-slice native-subagent acceptance contract. `ai-slop-cleaner` is installed as the final closeout cleanup skill, and `tmux-cli-agent-harness` is installed for inspectable reviewer/test/diagnostic sessions when native subagents are late, unavailable, or need pane history.
 
 ## Codex integration surface
 
@@ -666,6 +667,9 @@ ralpha workflow init --task "bootstrap a new task"
 ralpha workflow route --text '$ralpha update src/router.mjs with activation tests' --activate
 ralpha state read --mode ralpha
 ralpha verdict P0-02 architect PASS "accepted"
+ralpha verdict P0-02 code-reviewer CHANGES "edge case failed" --review-round 2 --review-lens edge/state/regression --review-cycle-id P0-02-loop
+ralpha verdict FINAL-CLOSEOUT workflow-auditor PASS "artifacts agree"
+ralpha acceptance wait --slice FINAL-CLOSEOUT --roles architect,code-reviewer,code-simplifier,workflow-auditor
 ralpha acceptance wait --slice P0-02 --roles architect,code-reviewer --tmux ralpha-P0-02-reviewer-a1b2 --log /tmp/ralpha-P0-02-reviewer-a1b2.log
 ralpha trace show
 ```

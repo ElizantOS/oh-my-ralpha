@@ -218,6 +218,40 @@ describe('oh-my-ralpha standalone runtime', () => {
     assert.equal(await readModeState({ cwd, mode: 'ralpha' }), null);
   });
 
+  it('accepts workflow-auditor verdicts with review loop metadata', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-verdict-workflow-auditor-');
+    const originalLog = console.log;
+    const lines = [];
+    console.log = (value) => {
+      lines.push(String(value));
+    };
+    try {
+      await runCli([
+        'verdict',
+        'FINAL-CLOSEOUT',
+        'workflow-auditor',
+        'PASS',
+        'workflow artifacts agree',
+        '--cwd',
+        cwd,
+        '--review-round',
+        '2',
+        '--review-lens',
+        'workflow-state',
+        '--review-cycle-id',
+        'cycle-final-1',
+      ]);
+    } finally {
+      console.log = originalLog;
+    }
+
+    const result = JSON.parse(lines[0]);
+    assert.equal(result.record.role, 'workflow-auditor');
+    assert.equal(result.record.review_round, 2);
+    assert.equal(result.record.review_lens, 'workflow-state');
+    assert.equal(result.record.review_cycle_id, 'cycle-final-1');
+  });
+
   it('keeps reviewer CHANGES blocking even after a later leader PASS', async () => {
     const cwd = await makeTempWorkspace('oh-my-ralpha-acceptance-gate-');
     const originalLog = console.log;
@@ -279,6 +313,32 @@ describe('oh-my-ralpha standalone runtime', () => {
     assert.deepEqual(result.roles, ['architect', 'code-reviewer']);
   });
 
+  it('waits for all four final-closeout reviewer PASS records', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-final-closeout-acceptance-');
+    const originalLog = console.log;
+    console.log = () => {};
+    try {
+      await runCli(['verdict', 'FINAL-CLOSEOUT', 'architect', 'PASS', 'architect accepted', '--cwd', cwd]);
+      await runCli(['verdict', 'FINAL-CLOSEOUT', 'code-reviewer', 'PASS', 'reviewer accepted', '--cwd', cwd]);
+      await runCli(['verdict', 'FINAL-CLOSEOUT', 'code-simplifier', 'PASS', 'simplifier accepted', '--cwd', cwd]);
+      await runCli(['verdict', 'FINAL-CLOSEOUT', 'workflow-auditor', 'PASS', 'workflow accepted', '--cwd', cwd]);
+    } finally {
+      console.log = originalLog;
+    }
+
+    const result = await waitForAcceptance({
+      cwd,
+      sliceId: 'FINAL-CLOSEOUT',
+      roles: ['architect', 'code-reviewer', 'code-simplifier', 'workflow-auditor'],
+      idleMs: 10,
+      maxMs: 100,
+      pollMs: 5,
+    });
+
+    assert.equal(result.status, 'accepted');
+    assert.deepEqual(result.roles, ['architect', 'code-reviewer', 'code-simplifier', 'workflow-auditor']);
+  });
+
   it('returns blocked when a reviewer CHANGES verdict is latest', async () => {
     const cwd = await makeTempWorkspace('oh-my-ralpha-acceptance-wait-blocked-');
     const originalLog = console.log;
@@ -302,6 +362,67 @@ describe('oh-my-ralpha standalone runtime', () => {
     assert.equal(result.status, 'blocked');
     assert.equal(result.gate.has_blocking_reviewer_verdict, true);
     assert.equal(result.gate.blocking_records[0].verdict, 'CHANGES');
+  });
+
+  it('marks review loops for escalation after three blocking rounds', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-review-loop-escalation-');
+    const originalLog = console.log;
+    console.log = () => {};
+    try {
+      await runCli([
+        'verdict',
+        'P0-09',
+        'code-reviewer',
+        'CHANGES',
+        'round one blocker',
+        '--cwd',
+        cwd,
+        '--review-round',
+        '1',
+        '--review-lens',
+        'spec/correctness',
+        '--review-cycle-id',
+        'cycle-p0-09',
+      ]);
+      await runCli([
+        'verdict',
+        'P0-09',
+        'code-reviewer',
+        'CHANGES',
+        'round two blocker',
+        '--cwd',
+        cwd,
+        '--review-round',
+        '2',
+        '--review-lens',
+        'edge/state/regression',
+        '--review-cycle-id',
+        'cycle-p0-09',
+      ]);
+      await runCli([
+        'verdict',
+        'P0-09',
+        'code-reviewer',
+        'CHANGES',
+        'round three blocker',
+        '--cwd',
+        cwd,
+        '--review-round',
+        '3',
+        '--review-lens',
+        'tests/maintainability',
+        '--review-cycle-id',
+        'cycle-p0-09',
+      ]);
+    } finally {
+      console.log = originalLog;
+    }
+
+    const summary = await summarizeAcceptance({ cwd, sliceId: 'P0-09', roles: ['code-reviewer'] });
+    assert.equal(summary.gate.has_blocking_reviewer_verdict, true);
+    assert.equal(summary.gate.escalated_review_required, true);
+    assert.deepEqual(summary.gate.review_loop.blocking_rounds, [1, 2, 3]);
+    assert.match(summary.gate.review_loop.instruction, /Three blocking review-fix rounds/);
   });
 
   it('resets idle timeout when transcript log grows', async () => {
@@ -535,9 +656,11 @@ describe('oh-my-ralpha standalone runtime', () => {
     assert.equal(existsSync(join(installed.targetSkillDir, 'companions', 'prompts', 'architect.md')), true);
     assert.equal(existsSync(join(installed.targetSkillDir, 'companions', 'prompts', 'code-reviewer.md')), true);
     assert.equal(existsSync(join(installed.targetSkillDir, 'companions', 'prompts', 'code-simplifier.md')), true);
+    assert.equal(existsSync(join(installed.targetSkillDir, 'companions', 'prompts', 'workflow-auditor.md')), true);
     assert.equal(existsSync(join(installed.targetSkillDir, 'prompts', 'architect.md')), false);
     assert.equal(existsSync(join(installed.targetSkillDir, 'prompts', 'code-reviewer.md')), false);
     assert.equal(existsSync(join(installed.targetSkillDir, 'prompts', 'code-simplifier.md')), false);
+    assert.equal(existsSync(join(installed.targetSkillDir, 'prompts', 'workflow-auditor.md')), false);
     assert.equal(existsSync(join(installed.targetSkillDir, 'companions', 'skills', 'ai-slop-cleaner', 'SKILL.bundle.md')), true);
     assert.equal(existsSync(join(installed.targetSkillDir, 'companions', 'skills', 'tmux-cli-agent-harness', 'SKILL.bundle.md')), true);
     assert.equal(existsSync(join(installed.targetSkillDir, 'companions', 'skills', 'tmux-cli-agent-harness', 'references', 'tmux-control.md')), true);

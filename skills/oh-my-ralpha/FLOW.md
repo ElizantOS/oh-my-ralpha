@@ -53,7 +53,11 @@ This skill is Ralph specialized for the workflow that actually worked during the
    - The default acceptance path is one spawned code-reviewer after fresh proof.
    - Architect joins only for large, risky, cross-cutting, or boundary-sensitive changes.
    - Code-simplifier joins only in review-only mode when non-trivial edits create a real simplification question or during final cleanup review.
-   - Never spawn all three acceptance lanes simultaneously; the normal concurrent budget is one native acceptance agent and the hard maximum is two.
+   - Every TODO must run at least one review after fresh proof. `CHANGES`/`REJECT` starts a bounded review-fix loop: fix, rerun proof, then review again.
+   - Review-fix loops are capped at three blocking rounds before `escalated_review`: round 1 checks spec/correctness, round 2 checks edge cases/state/regression, and round 3 checks tests/maintainability/cleanup debt.
+   - Fix-review prompts include the original TODO diff, previous findings, the fix diff, and fresh proof so each round can judge convergence instead of only the newest patch.
+   - Never spawn all three acceptance lanes simultaneously for ordinary slices; the normal concurrent budget is one native acceptance agent and the hard maximum is two.
+   - Final closeout is the only budget exception: when all TODOs are complete and no active slice/next todo remains, run four independent read-only lanes for `FINAL-CLOSEOUT`: architect, code-reviewer, code-simplifier, and workflow-auditor.
    - Timeout handling must consume append-only reviewer evidence before degrading: if a timed-out reviewer has appended `CHANGES` or `REJECT`, that verdict blocks leader/manual `PASS` until fixed or explicitly scheduled with fresh proof.
    - Native wait timeouts are observation timeouts, not proof that the reviewer stopped. When tmux or transcript evidence exists, use tmux-aware acceptance wait semantics: `accepted` when required reviewer roles have latest `PASS`, `blocked` when latest reviewer evidence is `CHANGES`/`REJECT`, `activity_reset` whenever pane/transcript/acceptance output changes, `idle_timeout` only after continuous inactivity, and `max_timeout` after the total budget.
    - Do not close, replace, or degrade a reviewer while tmux pane output, transcript size/mtime, or acceptance records continue changing. New output resets the idle timer.
@@ -66,18 +70,19 @@ This skill is Ralph specialized for the workflow that actually worked during the
    - The native Stop hook prevents an uncleared active workflow from ending silently.
    - Pause metadata stays `active: true` and is never permission to stop.
    - Inactive non-terminal pseudo-pauses are blocked because they hide unfinished work.
-   - Team-style verification still belongs to the loop: per-slice fresh evidence, bounded reviewer-only architect/code-reviewer/code-simplifier slice acceptance as warranted, final deslop, and post-deslop regression.
+   - If active state has no resume target, Stop reads the workboard and rounds ledger. Completed TODOs plus `next_todo:null` and `remaining_todos:[]` route to the final-closeout gate instead of normal continuation.
+   - Team-style verification still belongs to the loop: per-slice fresh evidence, bounded reviewer-only architect/code-reviewer/code-simplifier slice acceptance as warranted, final deslop, post-deslop regression, and final four-lane closeout.
 
 5. **Leader owns code and workflow state during review**
    - Subagents are acceptance helpers, not workflow owners.
    - Only the leader/main thread writes code, `ralpha_state`, the workboard, and the rounds ledger during acceptance/final review.
    - Subagents may return `PASS` / `CHANGES` verdicts, findings, or proposed cleanup notes, but they must not set `awaiting_user`, clear state, edit code, or edit `.codex/oh-my-ralpha/working-model` truth-source files.
    - Subagents are append-only for workflow information: they can add verdicts/findings/proposed ledger text with `ralpha verdict <slice> <role> <PASS|CHANGES|REJECT|COMMENT> "summary"`, but only the leader converts that information into state/workboard/rounds transitions.
-   - Final acceptance happens after the latest mutating cleanup plus regression proof, and it stays read-only. If a simplification reviewer proposes changes, the leader returns to the cleanup lane before repeating proof/acceptance.
+   - Final acceptance happens after the latest mutating cleanup plus regression proof, and it stays read-only. If any final lane proposes changes, the leader returns to the cleanup lane before repeating proof and all four final lanes.
 
 6. **Reasoning budget stays practical**
    - Bundled setup keeps architect at high effort for architecture-sensitive work.
-   - Bundled setup lowers code-reviewer and code-simplifier to medium effort.
+   - Bundled setup lowers code-reviewer and code-simplifier to medium effort, and keeps workflow-auditor at high effort for closeout consistency.
    - If the host ignores configurable role budgets, the workflow relies on narrow prompts, one-agent default acceptance, tmux harness recovery when installed, one bounded replacement reviewer after evidence recheck, and only then timeout degradation.
 
 ## Built-in runtime support

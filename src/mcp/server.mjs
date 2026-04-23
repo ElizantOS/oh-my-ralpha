@@ -172,7 +172,7 @@ function ralphaTraceTool() {
         command: { type: 'string', enum: ['append', 'show'] },
         type: { type: 'string', description: 'Required for command=append.' },
         metadata: { type: 'object', description: 'Only for command=append.' },
-        actorRole: { type: 'string', description: 'Role appending information, e.g. architect, code-reviewer, code-simplifier, or leader.' },
+        actorRole: { type: 'string', description: 'Role appending information, e.g. architect, code-reviewer, code-simplifier, workflow-auditor, or leader.' },
         sliceId: { type: 'string', description: 'Optional active slice id for acceptance/evidence events.' },
         limit: { type: 'integer', description: 'Only for command=show.' },
         cwd: { type: 'string' },
@@ -235,13 +235,16 @@ function ralphaAcceptanceTool() {
       properties: {
         command: { type: 'string', enum: ['submit', 'list', 'wait'] },
         sliceId: { type: 'string', description: 'Required for command=submit/wait. Active slice id such as P0-02.' },
-        role: { type: 'string', description: 'Required for command=submit. architect, code-reviewer, code-simplifier, leader, or manual.' },
+        role: { type: 'string', description: 'Required for command=submit. architect, code-reviewer, code-simplifier, workflow-auditor, leader, or manual.' },
         roles: { type: 'array', description: 'Only for command=wait/list. Reviewer roles to wait for, e.g. ["architect","code-reviewer"].' },
         verdict: { type: 'string', description: 'Required for command=submit. Exact token: PASS, CHANGES, REJECT, or COMMENT.' },
         summary: { type: 'string', description: 'Short acceptance summary.' },
         findings: { type: 'array', description: 'Optional findings. May contain strings or structured JSON objects.' },
         suggestedLedgerText: { type: 'string', description: 'Optional exact text for the leader to copy into workboard/rounds.' },
         evidence: { type: 'object', description: 'Optional supporting evidence. This is informational only.' },
+        reviewRound: { type: 'integer', description: 'Optional review-fix loop round number for convergence tracking.' },
+        reviewLens: { type: 'string', description: 'Optional review lens, e.g. spec/correctness, edge/state/regression, or tests/maintainability.' },
+        reviewCycleId: { type: 'string', description: 'Optional stable id for one TODO review-fix cycle.' },
         limit: { type: 'integer', description: 'Only for command=list.' },
         tmuxTarget: { type: 'string', description: 'Only for command=wait. Optional tmux target to capture as live evidence.' },
         logPath: { type: 'string', description: 'Only for command=wait. Optional transcript log path to watch for growth.' },
@@ -277,6 +280,9 @@ function ralphaAcceptanceTool() {
             findings: args.findings,
             suggestedLedgerText: args.suggestedLedgerText,
             evidence: args.evidence,
+            reviewRound: args.reviewRound,
+            reviewLens: args.reviewLens,
+            reviewCycleId: args.reviewCycleId,
           });
           return {
             ok: true,
@@ -290,7 +296,7 @@ function ralphaAcceptanceTool() {
           return commandError(command, error instanceof Error ? error.message : String(error), {
             command: 'submit',
             sliceId: '<slice id>',
-            role: 'architect | code-reviewer | code-simplifier | leader | manual',
+            role: 'architect | code-reviewer | code-simplifier | workflow-auditor | leader | manual',
             verdict: 'PASS | CHANGES | REJECT | COMMENT',
           });
         }
@@ -323,7 +329,7 @@ function ralphaAcceptanceTool() {
           return commandError(command, error instanceof Error ? error.message : String(error), {
             command: 'wait',
             sliceId: '<slice id>',
-            roles: ['architect', 'code-reviewer'],
+            roles: ['architect', 'code-reviewer', 'code-simplifier', 'workflow-auditor'],
           });
         }
       }

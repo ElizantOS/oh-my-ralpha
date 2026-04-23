@@ -1,4 +1,10 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import {
+  FINAL_CLOSEOUT_ROLES,
+  FINAL_CLOSEOUT_SLICE_ID,
+  summarizeAcceptance,
+} from './acceptance.mjs';
 import { initWorkspace } from './init.mjs';
 import { readPlanningArtifacts, scaffoldPlan } from './planning.mjs';
 import { workingModelContextDir, workingModelPlansDir, workingModelStateDir } from './paths.mjs';
@@ -94,10 +100,80 @@ function readAwaitingUserReason(state) {
 function isSubagentWaitReason(value) {
   const reason = safeString(value).trim();
   if (!reason) return false;
-  const namesSubagentWork = /sub-?agent|native agent|acceptance agent|architect|code-reviewer|code-simplifier|reviewer|simplifier/i.test(reason);
+  const namesSubagentWork = /sub-?agent|native agent|acceptance agent|architect|code-reviewer|code-simplifier|workflow-auditor|reviewer|simplifier|auditor/i.test(reason);
   const namesWaiting = /wait|waiting|await|pending|timeout|timed out|capacity|limit|cap/i.test(reason);
   const namesUserDecision = /user.*(decision|input|approval|clarification)|human.*(decision|input|approval|clarification)|(decision|input|approval|clarification).*user/i.test(reason);
   return namesSubagentWork && namesWaiting && !namesUserDecision;
+}
+
+async function listLatestStateFile(cwd, pattern) {
+  const stateDir = workingModelStateDir(cwd);
+  try {
+    const entries = await readdir(stateDir, { withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isFile() && pattern.test(entry.name))
+      .map((entry) => join(stateDir, entry.name))
+      .sort((a, b) => a.localeCompare(b))
+      .at(-1) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function todoHasOpenStatus(content) {
+  return /`status`:\s*(?:pending|in_progress)\b/i.test(content);
+}
+
+function todoHasCompletedStatus(content) {
+  return /`status`:\s*completed\b/i.test(content);
+}
+
+function roundsHasOpenWork(rounds) {
+  const nextTodo = safeString(rounds?.next_todo).trim();
+  return Boolean(nextTodo) || (Array.isArray(rounds?.remaining_todos) && rounds.remaining_todos.length > 0);
+}
+
+function roundsIsFinalComplete(rounds) {
+  return rounds?.next_todo === null
+    && Array.isArray(rounds?.remaining_todos)
+    && rounds.remaining_todos.length === 0;
+}
+
+async function readFinalCloseoutArtifacts(cwd) {
+  const todoPath = await listLatestStateFile(cwd, /-todo\.md$/i);
+  const roundsPath = await listLatestStateFile(cwd, /-rounds\.json$/i);
+  if (!todoPath || !roundsPath) {
+    return { status: 'unknown', todoPath, roundsPath };
+  }
+
+  const todoContent = await readFile(todoPath, 'utf-8').catch(() => '');
+  const roundsContent = await readFile(roundsPath, 'utf-8').catch(() => '');
+  let rounds = null;
+  try {
+    rounds = JSON.parse(roundsContent);
+  } catch {
+    return { status: 'unknown', todoPath, roundsPath };
+  }
+
+  if (todoHasOpenStatus(todoContent) || roundsHasOpenWork(rounds)) {
+    return { status: 'open_work', todoPath, roundsPath, rounds };
+  }
+
+  if (todoHasCompletedStatus(todoContent) && roundsIsFinalComplete(rounds)) {
+    return { status: 'final_closeout', todoPath, roundsPath, rounds };
+  }
+
+  return { status: 'unknown', todoPath, roundsPath, rounds };
+}
+
+function finalCloseoutAccepted(acceptance) {
+  const latest = acceptance?.gate?.latest_by_role ?? {};
+  return !acceptance?.gate?.has_blocking_reviewer_verdict
+    && FINAL_CLOSEOUT_ROLES.every((role) => latest[role]?.verdict === 'PASS');
+}
+
+function finalCloseoutRoleList() {
+  return FINAL_CLOSEOUT_ROLES.join(', ');
 }
 
 async function readRalphaModeState(payload, cwd) {
@@ -342,6 +418,31 @@ async function buildStopOutput(payload, cwd) {
         decision: 'block',
         reason: `oh-my-ralpha ${scope} mode is paused, but paused is resumable metadata, not permission to stop.${resumeHint} Continue, fix the blocker, use an approved degraded path, or mark the mode terminal only for an explicit cancel/complete decision.`,
       };
+    }
+
+    if (!readResumeTarget(state)) {
+      const closeout = await readFinalCloseoutArtifacts(cwd);
+      if (closeout.status === 'final_closeout') {
+        const acceptance = await summarizeAcceptance({
+          cwd,
+          sliceId: FINAL_CLOSEOUT_SLICE_ID,
+          roles: FINAL_CLOSEOUT_ROLES,
+        });
+        if (finalCloseoutAccepted(acceptance)) {
+          return {
+            decision: 'block',
+            reason: `oh-my-ralpha ${scope} mode has completed workboard/rounds artifacts and ${FINAL_CLOSEOUT_SLICE_ID} already has four independent PASS verdicts (${finalCloseoutRoleList()}). Do not rerun review or edit code. The leader/main thread should only record terminal completion with active:false,current_phase:"complete" and then clear ralpha state after final artifacts are synced.`,
+          };
+        }
+
+        const blockerHint = acceptance.gate.has_blocking_reviewer_verdict
+          ? ' Existing FINAL-CLOSEOUT reviewer CHANGES/REJECT verdicts are blocking; fix them, rerun fresh proof, then rerun all four final lanes.'
+          : ' FINAL-CLOSEOUT is not accepted yet.';
+        return {
+          decision: 'block',
+          reason: `oh-my-ralpha ${scope} mode has no active slice or next_todo, and the latest workboard/rounds show all TODOs complete (${closeout.todoPath}; ${closeout.roundsPath}). Start the final-closeout gate instead of continuing normal TODO work: run four independent read-only deep reviews for ${FINAL_CLOSEOUT_SLICE_ID} with roles ${finalCloseoutRoleList()}. All four latest verdicts must be PASS before clearing state.${blockerHint}`,
+        };
+      }
     }
 
     return {

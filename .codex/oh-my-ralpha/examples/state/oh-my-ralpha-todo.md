@@ -45,5 +45,5 @@
 - `priority`: P1
 - `status`: completed
 - `implementation overview`: Run targeted tests, independent review, and final evidence sync so the skill is ready for packaging or further runtime-mode work.
-- `acceptance`: Reviewer lane says ready for packaging and all closeout artifacts agree.
-- `evidence`: Final verification included build/test/trigger assertions plus architect/reviewer readiness verdicts before the workboard and rounds ledger were closed.
+- `acceptance`: Final closeout reviewer lanes say ready for packaging and all closeout artifacts agree.
+- `evidence`: Final verification included build/test/trigger assertions plus architect, code-reviewer, code-simplifier, and workflow-auditor readiness verdicts before the workboard and rounds ledger were closed.

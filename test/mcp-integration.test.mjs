@@ -186,6 +186,36 @@ describe('oh-my-ralpha MCP integration', () => {
     assert.equal(unwrapTextResult(readResponse).state, null);
   });
 
+  it('allows workflow-auditor acceptance metadata through unified MCP', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'oh-my-ralpha-unified-workflow-auditor-'));
+    const appendResponse = await ralphaMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'ralpha_acceptance',
+        arguments: {
+          command: 'submit',
+          cwd,
+          sliceId: 'FINAL-CLOSEOUT',
+          role: 'workflow-auditor',
+          verdict: 'PASS',
+          summary: 'Workflow artifacts are aligned.',
+          reviewRound: 3,
+          reviewLens: 'workflow-state',
+          reviewCycleId: 'final-cycle',
+        },
+      },
+    });
+
+    const appended = unwrapTextResult(appendResponse);
+    assert.equal(appended.ok, true);
+    assert.equal(appended.record.role, 'workflow-auditor');
+    assert.equal(appended.record.review_round, 3);
+    assert.equal(appended.record.review_lens, 'workflow-state');
+    assert.equal(appended.record.review_cycle_id, 'final-cycle');
+  });
+
   it('surfaces blocking reviewer verdicts through acceptance list', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'oh-my-ralpha-unified-acceptance-blocking-'));
     await ralphaMcpServer.handleRequest({
@@ -357,6 +387,55 @@ describe('oh-my-ralpha MCP integration', () => {
     assert.equal(waited.status, 'accepted');
     assert.deepEqual(waited.roles, ['architect', 'code-reviewer']);
     assert.equal(waited.gate.has_blocking_reviewer_verdict, false);
+  });
+
+  it('waits for four final-closeout acceptance lanes through unified MCP', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'oh-my-ralpha-unified-final-closeout-'));
+    for (const [id, role] of [
+      [1, 'architect'],
+      [2, 'code-reviewer'],
+      [3, 'code-simplifier'],
+      [4, 'workflow-auditor'],
+    ]) {
+      await ralphaMcpServer.handleRequest({
+        jsonrpc: '2.0',
+        id,
+        method: 'tools/call',
+        params: {
+          name: 'ralpha_acceptance',
+          arguments: {
+            command: 'submit',
+            cwd,
+            sliceId: 'FINAL-CLOSEOUT',
+            role,
+            verdict: 'PASS',
+            summary: `${role} accepted.`,
+          },
+        },
+      });
+    }
+
+    const waitResponse = await ralphaMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'tools/call',
+      params: {
+        name: 'ralpha_acceptance',
+        arguments: {
+          command: 'wait',
+          cwd,
+          sliceId: 'FINAL-CLOSEOUT',
+          roles: ['architect', 'code-reviewer', 'code-simplifier', 'workflow-auditor'],
+          idleMs: 10,
+          maxMs: 100,
+          pollMs: 5,
+        },
+      },
+    });
+
+    const waited = unwrapTextResult(waitResponse);
+    assert.equal(waited.status, 'accepted');
+    assert.deepEqual(waited.roles, ['architect', 'code-reviewer', 'code-simplifier', 'workflow-auditor']);
   });
 
   it('routes prompts through the unified workflow command group', async () => {
