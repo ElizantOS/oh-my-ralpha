@@ -70,13 +70,15 @@ This skill is Ralph specialized for the workflow that actually worked during the
    - The native Stop hook prevents an uncleared active workflow from ending silently.
    - Pause metadata stays `active: true` and is never permission to stop.
    - Inactive non-terminal pseudo-pauses are blocked because they hide unfinished work.
+   - The only allowed waiting state is `awaiting_plan_review`, and only after the context, PRD, test spec, workboard, and rounds ledger are decision-complete and before any execution slice starts.
+   - During execution, approval to continue the next slice is not a stop reason; known `next_todo` / `current_slice` means continue.
    - If active state has no resume target, Stop reads the workboard and rounds ledger. Completed TODOs plus `next_todo:null` and `remaining_todos:[]` route to the final-closeout gate instead of normal continuation.
    - Team-style verification still belongs to the loop: per-slice fresh evidence, bounded reviewer-only architect/code-reviewer/code-simplifier slice acceptance as warranted, final deslop, post-deslop regression, and final four-lane closeout.
 
 5. **Leader owns code and workflow state during review**
    - Subagents are acceptance helpers, not workflow owners.
    - Only the leader/main thread writes code, `ralpha_state`, the workboard, and the rounds ledger during acceptance/final review.
-   - Subagents may return `PASS` / `CHANGES` verdicts, findings, or proposed cleanup notes, but they must not set `awaiting_user`, clear state, edit code, or edit `.codex/oh-my-ralpha/working-model` truth-source files.
+   - Subagents may return `PASS` / `CHANGES` verdicts, findings, or proposed cleanup notes, but they must not write waiting states, clear state, edit code, or edit `.codex/oh-my-ralpha/working-model` truth-source files.
    - Subagents are append-only for workflow information: they can add verdicts/findings/proposed ledger text with `ralpha verdict <slice> <role> <PASS|CHANGES|REJECT|COMMENT> "summary"`, but only the leader converts that information into state/workboard/rounds transitions.
    - Final acceptance happens after the latest mutating cleanup plus regression proof, and it stays read-only. If any final lane proposes changes, the leader returns to the cleanup lane before repeating proof and all four final lanes.
 

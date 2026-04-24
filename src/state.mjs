@@ -41,33 +41,6 @@ function readPatchPhase(patch) {
   return safeText(patch.current_phase || patch.currentPhase);
 }
 
-function readAwaitingUserReason(patch, mutationReason) {
-  if (!patch || typeof patch !== 'object') return safeText(mutationReason);
-  const nested = patch.state && typeof patch.state === 'object' ? patch.state : {};
-  return safeText(
-    nested.awaiting_user_reason
-      || nested.awaiting_user_prompt
-      || patch.awaiting_user_reason
-      || patch.awaiting_user_prompt
-      || mutationReason,
-  );
-}
-
-function isSubagentWaitReason(reason) {
-  const text = safeText(reason);
-  if (!text) return false;
-  const namesSubagentWork = /sub-?agent|native agent|acceptance agent|architect|code-reviewer|code-simplifier|workflow-auditor|reviewer|simplifier|auditor/i.test(text);
-  const namesWaiting = /wait|waiting|await|pending|timeout|timed out|capacity|limit|cap|等|等待|超时|上限/i.test(text);
-  const namesUserDecision = /user.*(decision|input|approval|clarification)|human.*(decision|input|approval|clarification)|(decision|input|approval|clarification).*user|用户|人工|确认|澄清/i.test(text);
-  return namesSubagentWork && namesWaiting && !namesUserDecision;
-}
-
-function isRealUserWaitReason(reason) {
-  const text = safeText(reason);
-  if (!text) return false;
-  return /user|human|operator|decision|input|approval|clarification|用户|人工|确认|澄清|批准|输入/.test(text);
-}
-
 export function validateStateMutation({
   command,
   patch,
@@ -93,25 +66,10 @@ export function validateStateMutation({
   }
 
   if (command === 'write' && readPatchPhase(patch) === 'awaiting_user') {
-    const reason = readAwaitingUserReason(patch, mutationReason);
-    if (!reason) {
-      return {
-        ok: false,
-        error: 'current_phase="awaiting_user" requires state.awaiting_user_reason or mutationReason describing the user input needed.',
-      };
-    }
-    if (isSubagentWaitReason(reason)) {
-      return {
-        ok: false,
-        error: 'current_phase="awaiting_user" is only for real user input, not waiting for subagents/reviewers/simplifiers. Record degraded acceptance evidence or continue the leader-owned workflow instead.',
-      };
-    }
-    if (!isRealUserWaitReason(reason)) {
-      return {
-        ok: false,
-        error: 'current_phase="awaiting_user" must clearly name the user/human decision, input, approval, or clarification needed.',
-      };
-    }
+    return {
+      ok: false,
+      error: 'current_phase="awaiting_user" is not supported. Use current_phase="awaiting_plan_review" only after decision-complete planning artifacts are ready for user review; otherwise keep ralpha active and continue execution.',
+    };
   }
 
   return { ok: true };

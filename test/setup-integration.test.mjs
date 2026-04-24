@@ -42,6 +42,103 @@ async function writeStopHookArtifacts(cwd, { open = false } = {}) {
   }, null, 2) + '\n', 'utf-8');
 }
 
+async function writePlanReviewArtifacts(cwd) {
+  const root = join(cwd, '.codex', 'oh-my-ralpha', 'working-model');
+  const contextDir = join(root, 'context');
+  const stateDir = join(root, 'state');
+  const plansDir = join(root, 'plans');
+  await mkdir(contextDir, { recursive: true });
+  await mkdir(stateDir, { recursive: true });
+  await mkdir(plansDir, { recursive: true });
+  await writeFile(join(contextDir, 'plan-review.md'), `# Plan Review Context
+
+- Task statement: Build a focused runtime change.
+- Desired outcome: Planning is ready for review before execution.
+- Known facts/evidence: Runtime hook and state files are available.
+- Constraints: Node-only implementation.
+- Unknowns/open questions: None before review.
+- Likely codebase touchpoints: src/native-hook.mjs, src/state.mjs, test/setup-integration.test.mjs.
+`, 'utf-8');
+  await writeFile(join(stateDir, 'plan-review-todo.md'), `# Plan Review TODO
+
+## \`P0-01\`
+- \`title\`: Implement reviewed plan
+- \`priority\`: P0
+- \`status\`: pending
+- \`implementation overview\`: Apply the accepted runtime change.
+- \`acceptance\`: Tests prove the plan-review state behavior.
+- \`evidence\`: npm test passes after implementation.
+`, 'utf-8');
+  await writeFile(join(stateDir, 'plan-review-rounds.json'), JSON.stringify({
+    task: 'plan-review',
+    current_iteration: 1,
+    max_iterations: 40,
+    current_focus: 'Await user review of decision-complete plan',
+    completed_todos: [],
+    next_todo: 'P0-01',
+    blocked_todos: [],
+    verification_evidence: {},
+    remaining_todos: ['P0-01'],
+    done_when: ['reviewed plan is approved for execution'],
+  }, null, 2) + '\n', 'utf-8');
+  await writeFile(join(plansDir, 'prd-plan-review.md'), `# PRD: Plan Review
+
+## Goal
+- Provide a dedicated plan review wait state.
+
+## Current State / Evidence
+- Runtime has state and Stop hook support.
+
+## Scope
+- In scope: planning review state.
+- Out of scope: execution slice review.
+
+## Constraints
+- Node-only implementation.
+
+## Success Criteria
+- Stop allows only complete plans to wait for review.
+
+## Assumptions
+- Review happens before execution slices start.
+
+## Open Questions
+- None.
+
+## Approach
+- Gate Stop behavior on planning artifact completeness.
+
+## Interfaces / APIs / Schemas / I/O
+- current_phase accepts awaiting_plan_review.
+
+## Data Flow
+- State is read by Stop and checked against planning artifacts.
+
+## Edge Cases / Failure Modes
+- Incomplete plans and active slices keep running.
+
+## Compatibility / Migration Notes
+- Legacy awaiting_user is rejected.
+
+## Execution Slices
+- P0-01 implements the reviewed runtime change.
+`, 'utf-8');
+  await writeFile(join(plansDir, 'test-spec-plan-review.md'), `# Test Spec: Plan Review
+
+## Narrow Proof
+- Run setup integration tests for Stop hook behavior.
+
+## Broad Regression
+- Run the full Node test suite.
+
+## Integration / Manual Scenarios
+- Activate ralpha planning, complete artifacts, and wait for review.
+
+## Acceptance Evidence
+- Tests show awaiting_plan_review is allowed only before execution.
+`, 'utf-8');
+}
+
 describe('oh-my-ralpha setup integration', () => {
   it('writes config.toml and hooks.json while installing the runtime', async () => {
     const cwd = await makeTempWorkspace('oh-my-ralpha-setup-');
@@ -564,19 +661,18 @@ describe('oh-my-ralpha setup integration', () => {
     assert.match(output.reason, /Resume target is P0-04/);
   });
 
-  it('allows awaiting_user state with resume target and reason', async () => {
-    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-awaiting-user-');
+  it('allows awaiting_plan_review only after planning artifacts are complete', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-plan-review-');
+    await writePlanReviewArtifacts(cwd);
     await writeModeState({
       cwd,
       mode: 'ralpha',
-      sessionId: 'sess-awaiting-user',
+      sessionId: 'sess-plan-review',
       patch: {
         active: true,
-        current_phase: 'awaiting_user',
+        current_phase: 'awaiting_plan_review',
         state: {
-          next_todo: 'P0-04',
-          current_slice: 'P0-04',
-          awaiting_user_reason: 'waiting for queued user insertion',
+          planning_review_reason: 'decision-complete plan is ready for user review',
         },
       },
     });
@@ -584,25 +680,23 @@ describe('oh-my-ralpha setup integration', () => {
     const output = await dispatchNativeHook({
       hook_event_name: 'Stop',
       cwd,
-      session_id: 'sess-awaiting-user',
+      session_id: 'sess-plan-review',
     });
 
     assert.equal(output, null);
   });
 
-  it('blocks awaiting_user when it is only waiting on subagents', async () => {
-    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-awaiting-subagent-');
+  it('blocks awaiting_plan_review when planning artifacts are incomplete', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-plan-review-incomplete-');
     await writeModeState({
       cwd,
       mode: 'ralpha',
-      sessionId: 'sess-awaiting-subagent',
+      sessionId: 'sess-plan-review-incomplete',
       patch: {
         active: true,
-        current_phase: 'awaiting_user',
+        current_phase: 'awaiting_plan_review',
         state: {
-          next_todo: 'P0-04',
-          current_slice: 'P0-04',
-          awaiting_user_reason: 'waiting for code-reviewer and code-simplifier acceptance',
+          planning_review_reason: 'decision-complete plan is ready for user review',
         },
       },
     });
@@ -610,17 +704,44 @@ describe('oh-my-ralpha setup integration', () => {
     const blocked = await dispatchNativeHook({
       hook_event_name: 'Stop',
       cwd,
-      session_id: 'sess-awaiting-subagent',
+      session_id: 'sess-plan-review-incomplete',
     });
 
     assert.equal(blocked.decision, 'block');
-    assert.match(blocked.reason, /awaiting_user is only for real user decisions/i);
-    assert.match(blocked.reason, /subagent timeouts or host limits/i);
-    assert.match(blocked.reason, /degraded acceptance evidence/i);
+    assert.match(blocked.reason, /awaiting plan review/i);
+    assert.match(blocked.reason, /planning artifacts are not decision-complete/i);
   });
 
-  it('blocks awaiting_user state without resume reason', async () => {
-    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-awaiting-user-missing-reason-');
+  it('blocks awaiting_plan_review after an execution slice exists', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-plan-review-active-slice-');
+    await writePlanReviewArtifacts(cwd);
+    await writeModeState({
+      cwd,
+      mode: 'ralpha',
+      sessionId: 'sess-plan-review-active-slice',
+      patch: {
+        active: true,
+        current_phase: 'awaiting_plan_review',
+        state: {
+          current_slice: 'P0-04',
+          planning_review_reason: 'decision-complete plan is ready for user review',
+        },
+      },
+    });
+
+    const blocked = await dispatchNativeHook({
+      hook_event_name: 'Stop',
+      cwd,
+      session_id: 'sess-plan-review-active-slice',
+    });
+
+    assert.equal(blocked.decision, 'block');
+    assert.match(blocked.reason, /already has execution resume target P0-04/i);
+    assert.match(blocked.reason, /only before execution slices start/i);
+  });
+
+  it('blocks legacy awaiting_user state', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-stop-awaiting-user-legacy-');
     await writeModeState({
       cwd,
       mode: 'ralpha',
@@ -628,8 +749,7 @@ describe('oh-my-ralpha setup integration', () => {
         active: true,
         current_phase: 'awaiting_user',
         state: {
-          next_todo: 'P0-04',
-          current_slice: 'P0-04',
+          awaiting_user_reason: 'waiting for user clarification',
         },
       },
     });
@@ -640,8 +760,8 @@ describe('oh-my-ralpha setup integration', () => {
     });
 
     assert.equal(blocked.decision, 'block');
-    assert.match(blocked.reason, /awaiting user input/i);
-    assert.match(blocked.reason, /awaiting_user_reason/i);
+    assert.match(blocked.reason, /unsupported current_phase:"awaiting_user"/i);
+    assert.match(blocked.reason, /awaiting_plan_review/i);
   });
 
   it('blocks paused state without resume target', async () => {

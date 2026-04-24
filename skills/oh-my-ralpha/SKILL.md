@@ -182,7 +182,7 @@ Do not use `current_phase: "paused"` as a response to user insertions. Pause met
    - When `tmux-cli-agent-harness` is installed, prefer it for user-inspected reviews, long-running reviewer diagnosis, native reviewer timeout recovery, and replacement reviewer runs that need retained pane history. Tmux is the evidence/interaction layer; `ralpha_state`, `ralpha_trace`, and `ralpha_acceptance` remain the durable control plane.
    - Do not introduce mailbox files for ralpha v1. Use tmux `capture-pane`/optional `pipe-pane` transcript for live evidence, `ralpha_trace` for operational checkpoints, and `ralpha_acceptance` for verdicts.
    - Only when no verdict exists after the evidence check and `acceptance wait` returns `idle_timeout` or `max_timeout` should the leader launch one bounded replacement reviewer, subject to the hard maximum of two active acceptance agents per slice; if the replacement also times out or spawning is unavailable/capped, record `degraded_acceptance_timeout`, run a leader-owned manual acceptance pass, and continue after fresh proof
-   - Do not set `current_phase: "awaiting_user"` just to wait for a subagent; `awaiting_user` is only for a real user decision or missing user input
+   - Do not pause execution for user approval between slices. Once execution has a known `next_todo` or `current_slice`, keep `current_phase: "executing"` and continue.
    - Do not mark a slice `completed` until fresh evidence plus required native or degraded acceptance evidence is recorded
    - Acceptance subagents must not edit code. If an acceptance lane unexpectedly changes files, treat that result as a contract violation, inspect the diff, make any keep/revert/fix decision in the leader thread, and re-run proof before recording acceptance
    - Subagents must not call `ralpha_state write`, `ralpha_state clear`, `state_write`, edit code, or edit `.codex/oh-my-ralpha/working-model/**`; the leader records accepted verdicts and follow-up verification in the workboard and rounds ledger
@@ -263,9 +263,10 @@ The native `Stop` hook is a cleanup guard, not a verification lane.
 - It does not replace per-slice fresh evidence, bounded reviewer-only `architect` / `code-reviewer` / `code-simplifier` acceptance when warranted, the final deslop pass, or post-deslop regression
 - If `active:true` has no `state.next_todo` or `state.current_slice`, the hook reads the latest workboard and rounds ledger; when all TODOs are complete and rounds has `next_todo:null` plus `remaining_todos:[]`, it blocks with the final-closeout gate instead of telling the agent to continue normal TODO work
 - The final-closeout gate requires `FINAL-CLOSEOUT` `PASS` verdicts from `architect`, `code-reviewer`, `code-simplifier`, and `workflow-auditor`; after those exist, the hook should only ask the leader to mark state terminal and clear it, not rerun review or edit code
-- `current_phase: "awaiting_user"` is the only active non-terminal phase that may end a turn; it must include `state.next_todo` or `state.current_slice` plus `state.awaiting_user_reason` or `state.awaiting_user_prompt`
+- `current_phase: "awaiting_plan_review"` is the only active non-terminal phase that may end a turn. It is valid only after planning artifacts are decision-complete and before any execution slice has started.
+- Do not use a user-waiting state during execution. If `next_todo` or `current_slice` is known, keep `current_phase: "executing"` and continue automatically.
 - `current_phase: "paused"` is resumable metadata only; it is never permission to stop while `active: true`
-- Blocker states such as acceptance timeouts must continue, fix the blocker, use an approved degraded path, or ask the user before stopping only when a real user decision is required
+- Blocker states such as acceptance timeouts must continue, fix the blocker, or use an approved degraded path; do not encode execution blockers as waiting states
 - It blocks inactive non-terminal pseudo-pauses such as `active: false` with `current_phase: "paused_after_*"`
 - Clear the active mode state only after those gates are recorded in the workboard and rounds ledger
 </Stop_Hook_Scope>
@@ -331,7 +332,7 @@ Use the built-in ralpha state tools for the skill lifecycle. This is the Ralph i
 
 - **State ownership**:
   The leader/main thread is the sole writer of code, `ralpha_state`, `.codex/oh-my-ralpha/working-model/state/*-todo.md`, and `.codex/oh-my-ralpha/working-model/state/*-rounds.json` during acceptance/final review. Acceptance subagents may suggest the exact note to record, but they must not edit files, write state, or clear state themselves.
-  State write/clear tools require `actorRole: "leader"` plus `mutationReason`; calls from `architect`, `code-reviewer`, `code-simplifier`, `workflow-auditor`, or generic subagent/acceptance roles are rejected. `current_phase: "awaiting_user"` is rejected unless the reason clearly names the real user input/decision needed. Subagents may add append-only information with `ralpha verdict`; the leader decides whether and how that information changes state.
+  State write/clear tools require `actorRole: "leader"` plus `mutationReason`; calls from `architect`, `code-reviewer`, `code-simplifier`, `workflow-auditor`, or generic subagent/acceptance roles are rejected. `current_phase: "awaiting_plan_review"` is the only waiting state and is reserved for decision-complete planning artifacts awaiting user review before execution starts. Subagents may add append-only information with `ralpha verdict`; the leader decides whether and how that information changes state.
 - **On start**:
   `state_write({mode: "ralpha", actorRole: "leader", mutationReason: "leader starts ralpha execution", active: true, iteration: 1, max_iterations: 40, current_phase: "executing", started_at: "<now>", state: {context_snapshot_path: "<snapshot>", workboard_path: "<todo>", rounds_path: "<rounds>", current_slice: "<id>"}})`
 - **On each iteration**:
@@ -341,9 +342,9 @@ Use the built-in ralpha state tools for the skill lifecycle. This is the Ralph i
 - **On external interruption checkpoint**:
   `state_write({mode: "ralpha", actorRole: "leader", mutationReason: "record resumable interruption checkpoint", active: true, current_phase: "paused", pause_reason: "<reason>", state: {next_todo: "<id>", current_slice: "<id>"}})`
   This preserves resume metadata only; it does not permit the Stop hook to end the turn while the mode is active.
-- **On waiting for the next user message**:
-  `state_write({mode: "ralpha", actorRole: "leader", mutationReason: "waiting for user decision: <why input is needed>", active: true, current_phase: "awaiting_user", state: {next_todo: "<id>", current_slice: "<id>", awaiting_user_reason: "<why user input is needed>"}})`
-  This is the only active non-terminal state that may end a turn so queued user input can be processed. Do not use it for subagent timeouts, subagent capacity limits, or background acceptance waits.
+- **On plan review**:
+  `state_write({mode: "ralpha", actorRole: "leader", mutationReason: "decision-complete plan is ready for user review", active: true, current_phase: "awaiting_plan_review", state: {planning_review_reason: "decision-complete plan is ready for user review"}})`
+  This is the only active non-terminal state that may end a turn, and only before execution begins. Do not use it for generic user approval to proceed to the next known slice/TODO, subagent timeouts, subagent capacity limits, background acceptance waits, or any execution blocker.
 - **On completion**:
   `state_write({mode: "ralpha", actorRole: "leader", mutationReason: "all ralpha gates passed", active: false, current_phase: "complete", completed_at: "<now>"})`
 - **On cleanup**:

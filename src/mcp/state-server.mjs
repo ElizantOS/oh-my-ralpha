@@ -41,7 +41,7 @@ const server = createMcpServer({
           patch: { type: 'object' },
           replace: { type: 'boolean' },
           actorRole: { type: 'string', description: 'Required for write. Use "leader" from the main workflow thread; acceptance subagents are read-only.' },
-          mutationReason: { type: 'string', description: 'Required when writing current_phase="awaiting_user"; must describe the real user input needed.' },
+          mutationReason: { type: 'string', description: 'Required for write/clear. Use current_phase="awaiting_plan_review" only after decision-complete planning artifacts are ready for user review.' },
         },
         required: ['mode', 'patch'],
       },

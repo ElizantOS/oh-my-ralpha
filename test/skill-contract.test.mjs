@@ -142,8 +142,10 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(skill, /ai-slop-cleaner.*--no-deslop/i);
     assert.match(skill, /Post-deslop regression passed/i);
     assert.match(skill, /`Stop` hook is a cleanup guard, not a verification lane/i);
-    assert.match(skill, /current_phase: "awaiting_user"/i);
+    assert.match(skill, /current_phase: "awaiting_plan_review"/i);
     assert.match(skill, /only active non-terminal phase that may end a turn/i);
+    assert.match(skill, /valid only after planning artifacts are decision-complete and before any execution slice has started/i);
+    assert.match(skill, /Do not use a user-waiting state during execution/i);
     assert.match(skill, /current_phase: "paused"/i);
     assert.match(skill, /resumable metadata only/i);
     assert.match(skill, /never permission to stop/i);
@@ -175,12 +177,13 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(skill, /this append-only evidence is not a state transition until the leader applies it/i);
     assert.match(skill, /explicit mutation lane, separate from reviewer-only acceptance/i);
     assert.match(skill, /State write\/clear tools require `actorRole: "leader"` plus `mutationReason`/i);
-    assert.match(skill, /current_phase: "awaiting_user"` is rejected unless the reason clearly names the real user input\/decision needed/i);
+    assert.match(skill, /current_phase: "awaiting_plan_review"` is the only waiting state/i);
+    assert.match(skill, /reserved for decision-complete planning artifacts awaiting user review before execution starts/i);
     assert.match(skill, /Final acceptance is read-only/i);
     assert.match(skill, /Final reviewer-only acceptance/i);
     assert.match(skill, /Any `CHANGES` or `REJECT` from any final lane blocks state cleanup/i);
     assert.match(skill, /Do not edit files\. Do not write or clear ralpha_state/i);
-    assert.match(skill, /Do not use it for subagent timeouts, subagent capacity limits, or background acceptance waits/i);
+    assert.match(skill, /Do not use it for generic user approval to proceed to the next known slice\/TODO, subagent timeouts, subagent capacity limits, background acceptance waits, or any execution blocker/i);
     assert.match(flow, /Only the leader\/main thread writes code, `ralpha_state`, the workboard, and the rounds ledger/i);
     assert.match(flow, /Subagents are append-only for workflow information[\s\S]*`ralpha verdict <slice> <role> <PASS\|CHANGES\|REJECT\|COMMENT> "summary"`/i);
     assert.match(flow, /Final acceptance happens after the latest mutating cleanup plus regression proof, and it stays read-only/i);

@@ -66,7 +66,7 @@ function ralphaStateTool() {
         patch: { type: 'object', description: 'Required for command=write.' },
         replace: { type: 'boolean', description: 'Only for command=write.' },
         actorRole: { type: 'string', description: 'Required for command=write/clear. Use "leader" from the main workflow thread. Acceptance subagents are read-only and must not mutate state.' },
-        mutationReason: { type: 'string', description: 'Required when writing current_phase="awaiting_user"; must describe the real user input needed.' },
+        mutationReason: { type: 'string', description: 'Required for write/clear. Use current_phase="awaiting_plan_review" only after decision-complete planning artifacts are ready for user review.' },
         sessionId: { type: 'string' },
         cwd: { type: 'string' },
         workingDirectory: { type: 'string' },

@@ -599,7 +599,7 @@ describe('oh-my-ralpha MCP integration', () => {
     assert.equal(result.current_phase, 'executing');
   });
 
-  it('rejects legacy state server awaiting_user writes for subagent waits', async () => {
+  it('rejects legacy state server awaiting_user writes', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'oh-my-ralpha-mcp-state-guard-'));
     const response = await stateMcpServer.handleRequest({
       jsonrpc: '2.0',
@@ -626,7 +626,8 @@ describe('oh-my-ralpha MCP integration', () => {
 
     const result = unwrapTextResult(response);
     assert.equal(result.ok, false);
-    assert.match(result.error, /only for real user input/i);
+    assert.match(result.error, /not supported/i);
+    assert.match(result.error, /awaiting_plan_review/i);
   });
 
   it('appends and reads trace events through MCP tool handlers', async () => {

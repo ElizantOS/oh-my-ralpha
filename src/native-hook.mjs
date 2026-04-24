@@ -81,31 +81,6 @@ function readResumeTarget(state) {
   return '';
 }
 
-function readAwaitingUserReason(state) {
-  const nested = readNestedState(state);
-  for (const value of [
-    nested.awaiting_user_reason,
-    nested.awaiting_user_prompt,
-    nested.question,
-    state?.awaiting_user_reason,
-    state?.awaiting_user_prompt,
-    state?.question,
-  ]) {
-    const text = safeString(value).trim();
-    if (text) return text;
-  }
-  return '';
-}
-
-function isSubagentWaitReason(value) {
-  const reason = safeString(value).trim();
-  if (!reason) return false;
-  const namesSubagentWork = /sub-?agent|native agent|acceptance agent|architect|code-reviewer|code-simplifier|workflow-auditor|reviewer|simplifier|auditor/i.test(reason);
-  const namesWaiting = /wait|waiting|await|pending|timeout|timed out|capacity|limit|cap/i.test(reason);
-  const namesUserDecision = /user.*(decision|input|approval|clarification)|human.*(decision|input|approval|clarification)|(decision|input|approval|clarification).*user/i.test(reason);
-  return namesSubagentWork && namesWaiting && !namesUserDecision;
-}
-
 async function listLatestStateFile(cwd, pattern) {
   const stateDir = workingModelStateDir(cwd);
   try {
@@ -386,24 +361,25 @@ async function buildStopOutput(payload, cwd) {
 
   if (state?.active === true) {
     if (phase === 'awaiting_user') {
+      return {
+        decision: 'block',
+        reason: `oh-my-ralpha ${scope} mode uses unsupported current_phase:"awaiting_user". Use current_phase:"awaiting_plan_review" only for decision-complete planning artifacts awaiting user review; otherwise keep current_phase:"executing" and continue execution.`,
+      };
+    }
+
+    if (phase === 'awaiting_plan_review') {
       const resumeTarget = readResumeTarget(state);
-      const awaitingReason = readAwaitingUserReason(state);
-      if (!resumeTarget) {
+      if (resumeTarget) {
         return {
           decision: 'block',
-          reason: `oh-my-ralpha ${scope} mode is awaiting user input but missing resume state. Add state.next_todo or state.current_slice before ending the turn.`,
+          reason: `oh-my-ralpha ${scope} mode is awaiting plan review but already has execution resume target ${resumeTarget}. Plan-review waiting is only before execution slices start; keep current_phase:"executing" and continue that slice/TODO.`,
         };
       }
-      if (!awaitingReason) {
+      const planningArtifacts = await readPlanningArtifacts(cwd);
+      if (!planningArtifacts.complete) {
         return {
           decision: 'block',
-          reason: `oh-my-ralpha ${scope} mode is awaiting user input for ${resumeTarget} but missing state.awaiting_user_reason or state.awaiting_user_prompt. Record why the next user message is needed before ending the turn.`,
-        };
-      }
-      if (isSubagentWaitReason(awaitingReason)) {
-        return {
-          decision: 'block',
-          reason: `oh-my-ralpha ${scope} mode uses awaiting_user for a subagent wait (${awaitingReason}). awaiting_user is only for real user decisions or missing user input. For subagent timeouts or host limits, record degraded acceptance evidence in the workboard/rounds ledger and continue.`,
+          reason: `oh-my-ralpha ${scope} mode is awaiting plan review, but planning artifacts are not decision-complete. Finish the context, PRD, test spec, workboard, and rounds artifacts before stopping for user review.`,
         };
       }
       return null;
@@ -447,7 +423,7 @@ async function buildStopOutput(payload, cwd) {
 
     return {
       decision: 'block',
-      reason: `oh-my-ralpha ${scope} mode is still active (${phase || 'executing'}). Continue working. If the task truly needs the next user message, write current_phase:"awaiting_user" with state.next_todo or state.current_slice plus state.awaiting_user_reason before ending the turn. Do not use awaiting_user for subagent timeouts or capacity limits. Stop protection is not a substitute for fresh evidence, bounded reviewer-only architect/code-reviewer/code-simplifier acceptance, final deslop, or post-deslop regression.`,
+      reason: `oh-my-ralpha ${scope} mode is still active (${phase || 'executing'}). Continue working. Only decision-complete planning may stop with current_phase:"awaiting_plan_review"; execution slices must continue, fix blockers, use approved degraded paths, or finish closeout. Stop protection is not a substitute for fresh evidence, bounded reviewer-only architect/code-reviewer/code-simplifier acceptance, final deslop, or post-deslop regression.`,
     };
   }
   return null;

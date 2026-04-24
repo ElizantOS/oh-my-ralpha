@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { initWorkspace } from '../src/init.mjs';
 import { scaffoldInterview, scaffoldPlan } from '../src/planning.mjs';
-import { readModeState, writeModeState, clearModeState } from '../src/state.mjs';
+import { readModeState, writeModeState, clearModeState, validateStateMutation } from '../src/state.mjs';
 import { appendTraceEvent, readTraceEvents } from '../src/trace.mjs';
 import { routePrompt } from '../src/router.mjs';
 import { doctorReport } from '../src/doctor.mjs';
@@ -190,6 +190,44 @@ describe('oh-my-ralpha standalone runtime', () => {
 
     assert.equal(JSON.parse(lines[0]).active, true);
     assert.equal((await readModeState({ cwd, mode: 'ralpha' })).current_phase, 'executing');
+  });
+
+  it('rejects legacy awaiting_user state', async () => {
+    const result = validateStateMutation({
+      command: 'write',
+      actorRole: 'leader',
+      mutationReason: 'waiting for user clarification on whether the legacy API path remains in scope',
+      patch: {
+        active: true,
+        current_phase: 'awaiting_user',
+        state: {
+          awaiting_user_reason: 'waiting for user clarification on whether the legacy API path remains in scope',
+        },
+      },
+      requireActor: true,
+    });
+
+    assert.equal(result.ok, false);
+    assert.match(result.error, /not supported/i);
+    assert.match(result.error, /awaiting_plan_review/i);
+  });
+
+  it('allows the dedicated awaiting_plan_review state', async () => {
+    const result = validateStateMutation({
+      command: 'write',
+      actorRole: 'leader',
+      mutationReason: 'decision-complete plan is ready for user review',
+      patch: {
+        active: true,
+        current_phase: 'awaiting_plan_review',
+        state: {
+          planning_review_reason: 'decision-complete plan is ready for user review',
+        },
+      },
+      requireActor: true,
+    });
+
+    assert.equal(result.ok, true);
   });
 
   it('supports the single verdict CLI format for append-only acceptance evidence', async () => {
