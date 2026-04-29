@@ -221,7 +221,7 @@ function planImplementationHandoffContext(artifacts) {
   const lines = [
     'Codex Plan implementation handoff detected. Treat this as explicit approval to enter ralpha execution; ralpha mode state has been activated by the native hook.',
     'Before editing product code, sync the latest Plan-mode report from conversation into .codex/oh-my-ralpha/working-model context/todo/rounds artifacts when they are missing or incomplete.',
-    'Then continue one active slice at a time with ralpha gates: fresh proof, bounded reviewer-only acceptance when warranted, final deslop, post-deslop regression, and artifact sync.',
+    'Then continue one active slice at a time with ralpha gates: fresh proof, mandatory architect/code-reviewer/code-simplifier acceptance, final deslop, post-deslop regression, and artifact sync.',
     'This handoff is a native hook bridge for the Codex Plan button, not a public natural-language keyword.',
   ];
 
@@ -423,7 +423,7 @@ async function buildStopOutput(payload, cwd) {
 
     return {
       decision: 'block',
-      reason: `oh-my-ralpha ${scope} mode is still active (${phase || 'executing'}). Continue working. Only decision-complete planning may stop with current_phase:"awaiting_plan_review"; execution slices must continue, fix blockers, use approved degraded paths, or finish closeout. Stop protection is not a substitute for fresh evidence, bounded reviewer-only architect/code-reviewer/code-simplifier acceptance, final deslop, or post-deslop regression.`,
+      reason: `oh-my-ralpha ${scope} mode is still active (${phase || 'executing'}). Continue working. Only decision-complete planning may stop with current_phase:"awaiting_plan_review"; execution slices must continue, fix blockers, use approved degraded paths, or finish closeout. Stop protection is not a substitute for fresh evidence, mandatory architect/code-reviewer/code-simplifier acceptance, final deslop, or post-deslop regression.`,
     };
   }
   return null;

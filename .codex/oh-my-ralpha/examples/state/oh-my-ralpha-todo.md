@@ -28,9 +28,9 @@
 - `title`: Add team-lane, sub-TODO decomposition, and done-gate contracts
 - `priority`: P1
 - `status`: completed
-- `implementation overview`: Encode bounded reviewer-only architect/code-reviewer/code-simplifier acceptance lanes, mandatory large-TODO subdivision, and per-TODO completion gates in skill text and contract tests.
+- `implementation overview`: Encode mandatory architect/code-reviewer/code-simplifier acceptance lanes, mandatory large-TODO subdivision, and per-TODO completion gates in skill text and contract tests.
 - `acceptance`: The workflow explicitly enforces planning, decomposition, bounded execution, and final review sequencing.
-- `evidence`: `oh-my-ralpha` now hard-requires plan-first, sub-TODO decomposition for large work, one `in_progress` slice, layered verify -> reviewer-only bounded acceptance -> explicit cleanup when warranted -> regress -> artifact sync, and leader-owned code/state updates for the workboard and rounds ledger.
+- `evidence`: `oh-my-ralpha` now hard-requires plan-first, sub-TODO decomposition for large work, one `in_progress` slice, layered verify -> mandatory three-lane acceptance -> explicit cleanup when warranted -> regress -> artifact sync, and leader-owned code/state updates for the workboard and rounds ledger.
 
 ## `R-05`
 - `title`: Add contract tests for Ralph inheritance and `.codex/oh-my-ralpha` truth-source execution

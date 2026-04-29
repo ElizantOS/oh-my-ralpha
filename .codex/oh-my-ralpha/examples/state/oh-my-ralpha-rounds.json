@@ -32,6 +32,6 @@
   "notes": [
     "This standalone repo packages the extracted skill surface rather than the full oh-my-codex runtime.",
     "Audit artifacts are optional but must stay consistent with workboard, rounds, and verdict when present.",
-    "Native acceptance lanes are reviewer-only helpers; the leader owns code, ralpha_state, workboard, and rounds updates."
+    "Native acceptance lanes are mandatory slice gates; the leader owns code, ralpha_state, workboard, and rounds updates."
   ]
 }

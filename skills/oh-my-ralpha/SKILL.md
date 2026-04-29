@@ -1,6 +1,6 @@
 ---
 name: ralpha
-description: Ralph-derived persistent execution loop with bounded reviewer-only native-subagent slice acceptance centered on .codex working-model truth-source files
+description: Ralph-derived persistent execution loop with mandatory three-lane native-subagent slice acceptance centered on .codex working-model truth-source files
 ---
 
 [OH-MY-RALPHA + RALPH - ITERATION {{ITERATION}}/{{MAX}}]
@@ -21,7 +21,7 @@ Oh My Ralpha is a Ralph-derived persistence workflow. It keeps Ralph's full usef
 - There is already a TODO ledger, audit list, or obvious remaining slices
 - The user invokes `$ralpha` for continuation, completion, or remaining TODO work
 - The work needs to run for a long time without drifting or waiting for repeated "continue" nudges
-- The user invokes `$ralpha` and thereby requests this workflow's bounded reviewer-only native-subagent slice acceptance contract
+- The user invokes `$ralpha` and thereby requests this workflow's mandatory `architect` / `code-reviewer` / `code-simplifier` slice acceptance contract
 </Use_When>
 
 <Do_Not_Use_When>
@@ -49,11 +49,11 @@ Oh My Ralpha is Ralph with that specialization baked in.
 - Use one authoritative workboard and one rounds ledger; never rely on an implicit checklist
 - Keep exactly one slice `in_progress`
 - If the rounds ledger already has `next_todo` or `current_focus`, continue from it automatically instead of waiting for the user to say "继续"
-- Fire independent specialist lanes only when they materially help, have disjoint scope, and fit the acceptance budget
+- Fire independent specialist lanes only when they materially help and have disjoint scope, but every completed slice still requires the mandatory three-lane acceptance bundle
 - Use `run_in_background: true` for long operations (builds, installs, full test suites)
 - Deliver the full implementation: no scope reduction, no partial completion, no deleting tests to make them pass
 - Before final completion: broad regressions, relevant typecheck/lint, slice acceptance evidence, final deslop, post-deslop regression, and final artifact sync
-- Treat `$ralpha` invocation as explicit user intent to use bounded, leader-owned native subagents when they are useful and available
+- Treat `$ralpha` invocation as explicit user intent to use `architect`, `code-reviewer`, and `code-simplifier` native subagents for every completed slice
 - During acceptance and final review, the leader/main thread is the only writer for code, `ralpha_state`, the workboard, and the rounds ledger; subagents return verdicts and recommendations, never direct edits or workflow state transitions
 - Red line: subagents are append-only for workflow information. They may add verdicts/findings/proposed ledger text through the single `ralpha verdict <slice> <role> <PASS|CHANGES|REJECT|COMMENT> "summary"` command, but they must never modify workflow state/status/phase/current slice or mark anything complete.
 - Final acceptance is read-only. Any simplification or cleanup that changes files must happen in the explicit leader-owned cleanup lane before final acceptance, followed by fresh regression evidence.
@@ -129,12 +129,12 @@ Do not use `current_phase: "paused"` as a response to user insertions. Pause met
      - `workflow-auditor`: audit workboard, rounds, acceptance records, ralpha state, and Stop-hook closeout consistency
      - `ai-slop-cleaner`: final closeout deslop pass only
    - Large TODO decomposition is leader-owned, then `architect` validates the slice boundary
-   - Slice acceptance is mandatory, but native subagent usage is bounded and reviewer-only:
-     - Default to one native acceptance lane after fresh proof, usually `code-reviewer`
-     - Add `architect` only for large, risky, cross-cutting, or boundary-sensitive changes
-     - Add `code-simplifier` only in review-only mode after non-trivial code edits or at final cleanup when simplification advice is likely to reduce real complexity
-     - Never spawn all three acceptance lanes simultaneously for ordinary slices; if a slice truly needs all three roles, run them serially and record why
-     - Final closeout is the only exception: when all TODOs are complete and state is ready to clear, run four independent read-only lanes for `FINAL-CLOSEOUT`: `architect`, `code-reviewer`, `code-simplifier`, and `workflow-auditor`
+   - Slice acceptance is mandatory and always uses the full native subagent bundle:
+     - Spawn `architect` for slice boundary, architecture, and integration risk review
+     - Spawn `code-reviewer` for code quality, correctness, tests, and request-fit review
+     - Spawn `code-simplifier` in review-only mode for simplification and maintainability review
+     - Do not mark an ordinary slice complete after only one or two lanes; all three latest required verdicts must be accepted or explicitly degraded with evidence
+     - Final closeout adds a fourth read-only lane: `workflow-auditor` for artifact and state consistency
    - Acceptance prompts are role prompts, not workflow invocations; do not include explicit `$ralpha` tokens in spawned acceptance prompts
    - Plain references to the package/workflow name are safe in acceptance prompts because the router only treats bare `ralpha` as a workflow trigger when explicit workflow intent is present
    - Acceptance prompts must include the narrow read scope, the latest proof command/output, the expected `PASS` / `CHANGES` shape, and an explicit ban on editing files or writing `ralpha_state`, workboard, or rounds files
@@ -164,15 +164,14 @@ Do not use `current_phase: "paused"` as a response to user insertions. Pause met
    - Fix-review prompts must include the original TODO diff, previous reviewer findings, the fix diff, and fresh proof so reviewers do not only inspect the latest patch
    - If blocking findings remain after the third round, do not mark the TODO completed; record `escalated_review`, upgrade architect review, split a follow-up TODO, or explicitly ledger an accepted out-of-scope non-blocking item
 
-7. **Bounded reviewer-only slice acceptance bundle**:
+7. **Mandatory three-lane slice acceptance bundle**:
    - Fresh proof comes first; do not spawn acceptance agents against stale or unverified work
    - Use role-scoped acceptance prompts such as "Review slice P0-01 for the workflow package"; do not prefix them with `$ralpha`
    - Treat these as slice-level acceptance gates, not only final closeout gates
-   - Default acceptance path: one `code-reviewer` pass for ordinary slices after fresh proof
-   - Add `architect` for large, risky, cross-module, or boundary-sensitive slices
-   - Add `code-simplifier` only in review-only mode when the slice changed non-trivial code and simplification has a realistic chance of improving maintainability
-   - Never launch all three acceptance lanes at once for ordinary slices; the default concurrent native subagent budget is one, and the hard maximum is two active acceptance agents per slice
-   - The final-closeout gate is the only exception to the ordinary slice budget and requires four separate read-only reviewers for `FINAL-CLOSEOUT`
+   - Every completed ordinary slice must run all three native subagent lanes: `architect`, `code-reviewer`, and `code-simplifier`
+   - Launch the three lanes after fresh proof; they may run in parallel when the host supports it, or serially when host limits require it
+   - Do not downgrade to a single `code-reviewer` lane for ordinary slices
+   - The final-closeout gate adds `workflow-auditor` and requires four separate read-only reviewers for `FINAL-CLOSEOUT`
    - If subagent creation hits a host limit, do not keep spawning replacements; record `degraded_subagent_limit`, run a leader-owned manual acceptance pass, and continue after fresh proof
    - `wait_agent` timeout is an observation timeout, not execution failure. A reviewer may still be working after the leader's wait call returns without a final message.
    - Prefer `ralpha acceptance wait --slice <id> --role <role>` or `ralpha_acceptance command=wait` when tmux/transcript evidence is available. It returns `accepted`, `blocked`, `idle_timeout`, or `max_timeout`, and records `activity_reset` whenever tmux pane output, transcript growth, or acceptance-record activity proves the reviewer is still moving.
@@ -181,7 +180,7 @@ Do not use `current_phase: "paused"` as a response to user insertions. Pause met
    - Reviewer `CHANGES` or `REJECT` verdicts are blocking even if they arrive after a `wait_agent` timeout. A later leader/manual `PASS` does not override them; fix the finding or explicitly schedule accepted follow-up, rerun fresh proof, and repeat reviewer acceptance before completing the slice
    - When `tmux-cli-agent-harness` is installed, prefer it for user-inspected reviews, long-running reviewer diagnosis, native reviewer timeout recovery, and replacement reviewer runs that need retained pane history. Tmux is the evidence/interaction layer; `ralpha_state`, `ralpha_trace`, and `ralpha_acceptance` remain the durable control plane.
    - Do not introduce mailbox files for ralpha v1. Use tmux `capture-pane`/optional `pipe-pane` transcript for live evidence, `ralpha_trace` for operational checkpoints, and `ralpha_acceptance` for verdicts.
-   - Only when no verdict exists after the evidence check and `acceptance wait` returns `idle_timeout` or `max_timeout` should the leader launch one bounded replacement reviewer, subject to the hard maximum of two active acceptance agents per slice; if the replacement also times out or spawning is unavailable/capped, record `degraded_acceptance_timeout`, run a leader-owned manual acceptance pass, and continue after fresh proof
+   - Only when no verdict exists after the evidence check and `acceptance wait` returns `idle_timeout` or `max_timeout` should the leader launch one bounded replacement reviewer for the missing role; if the replacement also times out or spawning is unavailable/capped, record `degraded_acceptance_timeout`, run a leader-owned manual acceptance pass, and continue after fresh proof
    - Do not pause execution for user approval between slices. Once execution has a known `next_todo` or `current_slice`, keep `current_phase: "executing"` and continue.
    - Do not mark a slice `completed` until fresh evidence plus required native or degraded acceptance evidence is recorded
    - Acceptance subagents must not edit code. If an acceptance lane unexpectedly changes files, treat that result as a contract violation, inspect the diff, make any keep/revert/fix decision in the leader thread, and re-run proof before recording acceptance
@@ -205,14 +204,14 @@ Do not use `current_phase: "paused"` as a response to user insertions. Pause met
 9. **Final deslop pass**:
    - After all slices are accepted, the leader/main thread must run `ai-slop-cleaner` on all files changed during the session unless `--no-deslop` is active
    - Scope the cleaner to changed files only; do not widen it to unrelated files
-   - Run the cleaner in standard mode, not `--review`; this is the explicit mutation lane, separate from reviewer-only acceptance
+   - Run the cleaner in standard mode, not `--review`; this is the explicit mutation lane, separate from read-only acceptance
    - If the prompt contains `--no-deslop`, skip this pass and use the most recent successful pre-deslop verification evidence
 
 9.5 **Post-deslop regression**:
    - After the final deslop pass, re-run tests/build/lint and confirm they still pass
    - If post-deslop regression fails, fix and retry before final closeout
 
-9.7 **Final reviewer-only acceptance**:
+9.7 **Final read-only acceptance**:
    - After all TODOs are complete, no `current_slice` / `next_todo` remains, and post-deslop regression is green, run the mandatory final-closeout gate with fixed slice id `FINAL-CLOSEOUT`
    - Run four independent read-only reviewers for final closeout: `architect`, `code-reviewer`, `code-simplifier`, and `workflow-auditor`
    - Any `CHANGES` or `REJECT` from any final lane blocks state cleanup; the leader fixes it, reruns proof, and reruns all four final lanes
@@ -227,7 +226,7 @@ Do not use `current_phase: "paused"` as a response to user insertions. Pause met
    - Only claim done when:
      - no `pending` or `in_progress` items remain in the workboard
      - fresh verification is green
-     - bounded reviewer-only architect / code-reviewer / code-simplifier acceptance, or recorded degraded acceptance, exists for every completed slice where the lane was warranted
+    - mandatory `architect` / `code-reviewer` / `code-simplifier` acceptance, or recorded degraded acceptance, exists for every completed slice
      - TODO review-fix loops have converged, or `escalated_review` follow-up/non-blocking ledger decisions are recorded
      - final `ai-slop-cleaner` pass completed, unless `--no-deslop` explicitly skipped it
      - post-deslop regression passed, unless `--no-deslop` retained pre-deslop evidence
@@ -247,7 +246,7 @@ Do not use `current_phase: "paused"` as a response to user insertions. Pause met
   - `state_write(..., actorRole="leader", mutationReason="<why>")` on start / slice transition / verify / complete
   - `state_clear(mode="ralpha", actorRole="leader", mutationReason="<why>")` on final cleanup
 - Use `trace` and the rounds ledger together when reconstructing the last stop point
-- Use `architect`, `code-reviewer`, and `code-simplifier` as bounded reviewer-only native subagents for ordinary slice acceptance only when their role is warranted by risk and budget
+- Use `architect`, `code-reviewer`, and `code-simplifier` as mandatory native subagents for every ordinary slice acceptance after fresh proof
 - Use `workflow-auditor` only for final-closeout artifact/state consistency review, or for an explicitly escalated workflow-state concern
 - Never ask acceptance subagents to edit code, write `ralpha_state`, clear state, or update the workboard/rounds ledger; the leader/main thread owns those transitions
 - Ask acceptance subagents to add information only with one CLI format: `ralpha verdict <slice> <role> <PASS|CHANGES|REJECT|COMMENT> "summary"`
@@ -260,7 +259,7 @@ The native `Stop` hook is a cleanup guard, not a verification lane.
 
 - It blocks while `ralpha` mode state is still `active: true`
 - It reminds the agent to finish verification and cleanup before stopping
-- It does not replace per-slice fresh evidence, bounded reviewer-only `architect` / `code-reviewer` / `code-simplifier` acceptance when warranted, the final deslop pass, or post-deslop regression
+- It does not replace per-slice fresh evidence, mandatory `architect` / `code-reviewer` / `code-simplifier` acceptance, the final deslop pass, or post-deslop regression
 - If `active:true` has no `state.next_todo` or `state.current_slice`, the hook reads the latest workboard and rounds ledger; when all TODOs are complete and rounds has `next_todo:null` plus `remaining_todos:[]`, it blocks with the final-closeout gate instead of telling the agent to continue normal TODO work
 - The final-closeout gate requires `FINAL-CLOSEOUT` `PASS` verdicts from `architect`, `code-reviewer`, `code-simplifier`, and `workflow-auditor`; after those exist, the hook should only ask the leader to mark state terminal and clear it, not rerun review or edit code
 - `current_phase: "awaiting_plan_review"` is the only active non-terminal phase that may end a turn. It is valid only after planning artifacts are decision-complete and before any execution slice has started.
@@ -303,7 +302,7 @@ If the launcher is not yet on `PATH`, run the same commands from the repository 
 Bundled companions are installed by `setup` from this package, not fetched from an external OMX checkout:
 
 - role prompts/native agents: `architect`, `code-reviewer`, `code-simplifier`, `workflow-auditor`
-- acceptance role prompts default to reviewer-only behavior; `code-simplifier` proposes cleanup during acceptance and does not edit unless a later leader-owned cleanup prompt explicitly authorizes write mode
+- acceptance role prompts default to read-only verdict behavior; `code-simplifier` proposes cleanup during acceptance and does not edit unless a later leader-owned cleanup prompt explicitly authorizes write mode
 - default reasoning budgets written by `setup`: `architect=high`, `code-reviewer=medium`, `code-simplifier=medium`, `workflow-auditor=high`
 - skills: `ai-slop-cleaner`, `tmux-cli-agent-harness`
 - `tmux-cli-agent-harness` provides inspectable tmux reviewer/test/diagnostic sessions; it does not replace ralpha MCP state, trace, or acceptance evidence
@@ -386,7 +385,7 @@ Why bad: That needs ordinary planning or requirements discovery before oh-my-ral
 - [ ] Large TODOs were decomposed into sub-TODOs before implementation
 - [ ] Exactly one slice was active at a time
 - [ ] Each completed slice has fresh evidence
-- [ ] Each completed slice has recorded reviewer-only bounded acceptance: native `code-reviewer` / `architect` / `code-simplifier` as warranted, or an explicit degraded reason after timeout, host limit, or unavailable native subagents
+- [ ] Each completed slice has recorded mandatory three-lane acceptance: native `architect` / `code-reviewer` / `code-simplifier`, or an explicit degraded reason after timeout, host limit, or unavailable native subagents
 - [ ] TODO review-fix loops converged within three blocking rounds, or `escalated_review` follow-up/non-blocking ledger decisions are recorded
 - [ ] Broader regressions were run before final claim
 - [ ] Final `ai-slop-cleaner` ran on changed files (or `--no-deslop` explicitly skipped the deslop pass)

@@ -532,7 +532,7 @@ describe('oh-my-ralpha setup integration', () => {
     assert.match(blocked.reason, /session sess-stop/);
     assert.match(blocked.reason, /not a substitute/i);
     assert.match(blocked.reason, /fresh evidence/i);
-    assert.match(blocked.reason, /bounded reviewer-only architect\/code-reviewer\/code-simplifier acceptance/i);
+    assert.match(blocked.reason, /mandatory architect\/code-reviewer\/code-simplifier acceptance/i);
     assert.match(blocked.reason, /final deslop/i);
     assert.match(blocked.reason, /post-deslop regression/i);
 

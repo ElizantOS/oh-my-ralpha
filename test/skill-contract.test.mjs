@@ -109,12 +109,12 @@ describe('oh-my-ralpha skill contract', () => {
   });
 
   it('locks verification gates separately from Stop hook protection', () => {
-    assert.match(skill, /bounded reviewer-only native-subagent slice acceptance/i);
+    assert.match(skill, /mandatory three-lane native-subagent slice acceptance/i);
     assert.match(skill, /\$ralpha`? invocation as explicit user intent/i);
     assert.match(skill, /Each completed slice has fresh evidence/i);
-    assert.match(skill, /Default acceptance path: one `code-reviewer` pass/i);
-    assert.match(skill, /Never launch all three acceptance lanes at once/i);
-    assert.match(skill, /hard maximum is two active acceptance agents per slice/i);
+    assert.match(skill, /Every completed ordinary slice must run all three native subagent lanes/i);
+    assert.match(skill, /Do not downgrade to a single `code-reviewer` lane for ordinary slices/i);
+    assert.match(skill, /all three latest required verdicts must be accepted or explicitly degraded with evidence/i);
     assert.match(skill, /TODO review-fix convergence loop/i);
     assert.match(skill, /three blocking review-fix rounds/i);
     assert.match(skill, /original TODO diff[\s\S]*previous reviewer findings[\s\S]*fix diff[\s\S]*fresh proof/i);
@@ -137,8 +137,8 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(skill, /Do not close, replace, or degrade a reviewer lane while tmux\/transcript\/acceptance activity is still changing/i);
     assert.match(skill, /Reviewer `CHANGES` or `REJECT` verdicts are blocking/i);
     assert.match(skill, /A later leader\/manual `PASS` does not override them/i);
-    assert.match(skill, /one bounded replacement reviewer/i);
-    assert.match(skill, /Each completed slice has recorded reviewer-only bounded acceptance/i);
+    assert.match(skill, /one bounded replacement reviewer for the missing role/i);
+    assert.match(skill, /Each completed slice has recorded mandatory three-lane acceptance/i);
     assert.match(skill, /ai-slop-cleaner.*--no-deslop/i);
     assert.match(skill, /Post-deslop regression passed/i);
     assert.match(skill, /`Stop` hook is a cleanup guard, not a verification lane/i);
@@ -154,18 +154,18 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(skill, /active: false.*current_phase: "paused_after_\*"/);
     assert.match(skill, /next_todo:null[\s\S]*remaining_todos:\[\]/i);
     assert.match(skill, /mark state terminal and clear it, not rerun review or edit code/i);
-    assert.match(skill, /does not replace per-slice fresh evidence[\s\S]*bounded reviewer-only `architect` \/ `code-reviewer` \/ `code-simplifier` acceptance[\s\S]*final deslop pass[\s\S]*post-deslop regression/i);
+    assert.match(skill, /does not replace per-slice fresh evidence[\s\S]*mandatory `architect` \/ `code-reviewer` \/ `code-simplifier` acceptance[\s\S]*final deslop pass[\s\S]*post-deslop regression/i);
     assert.match(flow, /Stop protection is not verification/i);
-    assert.match(flow, /Verification stays layered and bounded/i);
+    assert.match(flow, /Verification stays layered and mandatory/i);
     assert.match(flow, /Review-fix loops are capped at three blocking rounds/i);
-    assert.match(flow, /Final closeout is the only budget exception/i);
+    assert.match(flow, /Final closeout adds workflow-auditor/i);
     assert.match(flow, /workflow-auditor/i);
     assert.match(flow, /Timeout handling must consume append-only reviewer evidence before degrading/i);
     assert.match(flow, /Native wait timeouts are observation timeouts/i);
     assert.match(flow, /`activity_reset` whenever pane\/transcript\/acceptance output changes/i);
     assert.match(flow, /`idle_timeout` only after continuous inactivity/i);
     assert.match(flow, /`max_timeout` after the total budget/i);
-    assert.match(flow, /one bounded replacement reviewer after evidence recheck/i);
+    assert.match(flow, /one replacement reviewer per missing role after evidence recheck/i);
   });
 
   it('keeps acceptance and final review read-only with leader-owned mutation', () => {
@@ -175,12 +175,12 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(skill, /Red line: subagents are append-only for workflow information/i);
     assert.match(skill, /Subagents may only add information via `ralpha verdict <slice> <role> <PASS\|CHANGES\|REJECT\|COMMENT> "summary"`/i);
     assert.match(skill, /this append-only evidence is not a state transition until the leader applies it/i);
-    assert.match(skill, /explicit mutation lane, separate from reviewer-only acceptance/i);
+    assert.match(skill, /explicit mutation lane, separate from read-only acceptance/i);
     assert.match(skill, /State write\/clear tools require `actorRole: "leader"` plus `mutationReason`/i);
     assert.match(skill, /current_phase: "awaiting_plan_review"` is the only waiting state/i);
     assert.match(skill, /reserved for decision-complete planning artifacts awaiting user review before execution starts/i);
     assert.match(skill, /Final acceptance is read-only/i);
-    assert.match(skill, /Final reviewer-only acceptance/i);
+    assert.match(skill, /Final read-only acceptance/i);
     assert.match(skill, /Any `CHANGES` or `REJECT` from any final lane blocks state cleanup/i);
     assert.match(skill, /Do not edit files\. Do not write or clear ralpha_state/i);
     assert.match(skill, /Do not use it for generic user approval to proceed to the next known slice\/TODO, subagent timeouts, subagent capacity limits, background acceptance waits, or any execution blocker/i);

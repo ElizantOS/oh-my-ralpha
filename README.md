@@ -110,7 +110,7 @@ The workflow-level execution lanes currently formalized by `oh-my-ralpha` are:
 - `code-simplifier`
 - `workflow-auditor`
 
-These are reviewer-only native-subagent lanes. Ordinary slices use a bounded subset after fresh proof; final closeout is the one heavy gate and requires four independent read-only `FINAL-CLOSEOUT` lanes: `architect`, `code-reviewer`, `code-simplifier`, and `workflow-auditor`. Implementation itself stays with the main thread in this standalone package; the OMX `team-executor` role is not bundled because this repo does not ship the OMX team runtime.
+These are native-subagent acceptance lanes. Every ordinary slice runs the mandatory three-lane bundle after fresh proof: `architect`, `code-reviewer`, and `code-simplifier`. Final closeout adds a fourth independent read-only `FINAL-CLOSEOUT` lane: `workflow-auditor`. Implementation itself stays with the main thread in this standalone package; the OMX `team-executor` role is not bundled because this repo does not ship the OMX team runtime.
 
 They are bundled in this repository under `companions/prompts/` and installed by `setup` under the target Codex home's `prompts/` and `agents/` directories. The bundled companion skills are:
 
@@ -462,8 +462,8 @@ force: $ralpha update /tmp/ralpha-subagent-team-smoke/.codex/oh-my-ralpha/workin
 
 Continue only if route returns finalSkill:"ralpha" and phase:"execution".
 Then run /root/.codex/bin/ralpha verify --scope user, check the installed
-architect/code-reviewer agent and prompt files, and spawn native architect and
-code-reviewer reviewer-only subagents.
+architect/code-reviewer/code-simplifier agent and prompt files, and spawn the
+mandatory native acceptance subagents.
 ```
 
 Each subagent must only write append-only evidence:

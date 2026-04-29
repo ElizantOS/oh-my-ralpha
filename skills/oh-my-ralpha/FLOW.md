@@ -47,23 +47,24 @@ This skill is Ralph specialized for the workflow that actually worked during the
 2. **Planning happens at slice level**
    - Large TODOs are decomposed before implementation instead of being executed as one long opaque thread.
 
-3. **Verification stays layered and bounded**
+3. **Verification stays layered and mandatory**
    - Narrow proof happens first.
-   - Every completed slice records acceptance evidence, but native subagents are used with an explicit budget.
-   - The default acceptance path is one spawned code-reviewer after fresh proof.
-   - Architect joins only for large, risky, cross-cutting, or boundary-sensitive changes.
-   - Code-simplifier joins only in review-only mode when non-trivial edits create a real simplification question or during final cleanup review.
+   - Every completed slice records acceptance evidence from all three native subagents: architect, code-reviewer, and code-simplifier.
+   - The default acceptance path is the full three-lane bundle after fresh proof.
+   - Architect always reviews slice boundaries, architecture, integration risk, and cross-module impact.
+   - Code-reviewer always reviews correctness, tests, edge cases, and request fit.
+   - Code-simplifier always reviews maintainability and simplification opportunities in read-only mode.
    - Every TODO must run at least one review after fresh proof. `CHANGES`/`REJECT` starts a bounded review-fix loop: fix, rerun proof, then review again.
    - Review-fix loops are capped at three blocking rounds before `escalated_review`: round 1 checks spec/correctness, round 2 checks edge cases/state/regression, and round 3 checks tests/maintainability/cleanup debt.
    - Fix-review prompts include the original TODO diff, previous findings, the fix diff, and fresh proof so each round can judge convergence instead of only the newest patch.
-   - Never spawn all three acceptance lanes simultaneously for ordinary slices; the normal concurrent budget is one native acceptance agent and the hard maximum is two.
-   - Final closeout is the only budget exception: when all TODOs are complete and no active slice/next todo remains, run four independent read-only lanes for `FINAL-CLOSEOUT`: architect, code-reviewer, code-simplifier, and workflow-auditor.
+   - Ordinary slices must not complete after only one or two acceptance lanes. All three latest required verdicts must be accepted or explicitly degraded with evidence.
+   - Final closeout adds workflow-auditor: when all TODOs are complete and no active slice/next todo remains, run four independent read-only lanes for `FINAL-CLOSEOUT`: architect, code-reviewer, code-simplifier, and workflow-auditor.
    - Timeout handling must consume append-only reviewer evidence before degrading: if a timed-out reviewer has appended `CHANGES` or `REJECT`, that verdict blocks leader/manual `PASS` until fixed or explicitly scheduled with fresh proof.
    - Native wait timeouts are observation timeouts, not proof that the reviewer stopped. When tmux or transcript evidence exists, use tmux-aware acceptance wait semantics: `accepted` when required reviewer roles have latest `PASS`, `blocked` when latest reviewer evidence is `CHANGES`/`REJECT`, `activity_reset` whenever pane/transcript/acceptance output changes, `idle_timeout` only after continuous inactivity, and `max_timeout` after the total budget.
    - Do not close, replace, or degrade a reviewer while tmux pane output, transcript size/mtime, or acceptance records continue changing. New output resets the idle timer.
    - `tmux-cli-agent-harness` is the preferred inspectable fallback for user-inspected reviews, timeout recovery, and replacement reviewer runs that need pane history. It uses tmux as evidence/interaction layer while ralpha MCP remains the durable control plane.
    - No mailbox is added in v1: use capture history/transcripts plus `ralpha_trace` checkpoints and `ralpha_acceptance` verdicts.
-   - Manual acceptance is a degraded fallback only after no reviewer verdict exists, tmux-aware waiting reaches `idle_timeout` or `max_timeout`, and one bounded replacement reviewer is unavailable, capped, or also timed out; the fallback must be recorded.
+   - Manual acceptance is a degraded fallback only after no reviewer verdict exists for a required role, tmux-aware waiting reaches `idle_timeout` or `max_timeout`, and one replacement reviewer is unavailable, capped, or also timed out; the fallback must be recorded.
    - Final cleanup runs through ai-slop-cleaner as the explicit mutation lane, followed by post-deslop regression.
 
 4. **Stop protection is not verification**
@@ -73,7 +74,7 @@ This skill is Ralph specialized for the workflow that actually worked during the
    - The only allowed waiting state is `awaiting_plan_review`, and only after the context, PRD, test spec, workboard, and rounds ledger are decision-complete and before any execution slice starts.
    - During execution, approval to continue the next slice is not a stop reason; known `next_todo` / `current_slice` means continue.
    - If active state has no resume target, Stop reads the workboard and rounds ledger. Completed TODOs plus `next_todo:null` and `remaining_todos:[]` route to the final-closeout gate instead of normal continuation.
-   - Team-style verification still belongs to the loop: per-slice fresh evidence, bounded reviewer-only architect/code-reviewer/code-simplifier slice acceptance as warranted, final deslop, post-deslop regression, and final four-lane closeout.
+   - Team-style verification still belongs to the loop: per-slice fresh evidence, mandatory architect/code-reviewer/code-simplifier slice acceptance, final deslop, post-deslop regression, and final four-lane closeout.
 
 5. **Leader owns code and workflow state during review**
    - Subagents are acceptance helpers, not workflow owners.
@@ -85,7 +86,7 @@ This skill is Ralph specialized for the workflow that actually worked during the
 6. **Reasoning budget stays practical**
    - Bundled setup keeps architect at high effort for architecture-sensitive work.
    - Bundled setup lowers code-reviewer and code-simplifier to medium effort, and keeps workflow-auditor at high effort for closeout consistency.
-   - If the host ignores configurable role budgets, the workflow relies on narrow prompts, one-agent default acceptance, tmux harness recovery when installed, one bounded replacement reviewer after evidence recheck, and only then timeout degradation.
+   - If the host ignores configurable role budgets, the workflow relies on narrow prompts for the required three-lane acceptance bundle, tmux harness recovery when installed, one replacement reviewer per missing role after evidence recheck, and only then timeout degradation.
 
 ## Built-in runtime support
 
