@@ -134,6 +134,7 @@ Do not use `current_phase: "paused"` as a response to user insertions. Pause met
      - Spawn `code-reviewer` for code quality, correctness, tests, and request-fit review
      - Spawn `code-simplifier` in review-only mode for simplification and maintainability review
      - Do not mark an ordinary slice complete after only one or two lanes; all three latest required verdicts must be accepted or explicitly degraded with evidence
+     - Preserve bounded launch behavior: default to serial lanes when host limits are unclear, run at most two active acceptance agents concurrently for ordinary slices, and record why if concurrency is expanded
      - Final closeout adds a fourth read-only lane: `workflow-auditor` for artifact and state consistency
    - Acceptance prompts are role prompts, not workflow invocations; do not include explicit `$ralpha` tokens in spawned acceptance prompts
    - Plain references to the package/workflow name are safe in acceptance prompts because the router only treats bare `ralpha` as a workflow trigger when explicit workflow intent is present
@@ -158,8 +159,8 @@ Do not use `current_phase: "paused"` as a response to user insertions. Pause met
    - Do not treat a slice as done until behavior is proven and tests are solidified
 
 6.7 **TODO review-fix convergence loop**:
-   - Every completed TODO/slice must run at least one reviewer acceptance pass after fresh proof
-   - If a reviewer returns `CHANGES` or `REJECT`, the leader fixes it, reruns fresh proof, and repeats reviewer acceptance before marking the TODO complete
+   - Every completed TODO/slice must run the full required acceptance bundle after fresh proof
+   - If any required lane returns `CHANGES` or `REJECT`, the leader fixes it, reruns fresh proof, and repeats the affected required acceptance lane before marking the TODO complete
    - Each TODO may run at most three blocking review-fix rounds before escalation; round 1 focuses on spec/correctness, round 2 on edge cases/state transitions/regression risk, and round 3 on tests/maintainability/cleanup debt
    - Fix-review prompts must include the original TODO diff, previous reviewer findings, the fix diff, and fresh proof so reviewers do not only inspect the latest patch
    - If blocking findings remain after the third round, do not mark the TODO completed; record `escalated_review`, upgrade architect review, split a follow-up TODO, or explicitly ledger an accepted out-of-scope non-blocking item
@@ -169,8 +170,8 @@ Do not use `current_phase: "paused"` as a response to user insertions. Pause met
    - Use role-scoped acceptance prompts such as "Review slice P0-01 for the workflow package"; do not prefix them with `$ralpha`
    - Treat these as slice-level acceptance gates, not only final closeout gates
    - Every completed ordinary slice must run all three native subagent lanes: `architect`, `code-reviewer`, and `code-simplifier`
-   - Launch the three lanes after fresh proof; they may run in parallel when the host supports it, or serially when host limits require it
-   - Do not downgrade to a single `code-reviewer` lane for ordinary slices
+   - Launch the three lanes after fresh proof; default to serial lanes when host limits are unclear, run at most two active acceptance agents concurrently for ordinary slices, and record why if concurrency is expanded
+   - Do not mark an ordinary slice complete with only a single `code-reviewer` lane; required `architect`, `code-reviewer`, and `code-simplifier` verdict evidence must exist or be explicitly degraded
    - The final-closeout gate adds `workflow-auditor` and requires four separate read-only reviewers for `FINAL-CLOSEOUT`
    - If subagent creation hits a host limit, do not keep spawning replacements; record `degraded_subagent_limit`, run a leader-owned manual acceptance pass, and continue after fresh proof
    - `wait_agent` timeout is an observation timeout, not execution failure. A reviewer may still be working after the leader's wait call returns without a final message.
@@ -280,9 +281,10 @@ When external runtime tooling is unavailable, use the built-in JS runtime shippe
 - `ralpha verdict P0-02 architect PASS "accepted"`
 - `ralpha verdict P0-02 code-reviewer CHANGES "ctx type mismatch"`
 - `ralpha verdict P0-02 code-reviewer CHANGES "edge case failed" --review-round 2 --review-lens edge/state/regression --review-cycle-id P0-02-loop`
+- `ralpha verdict P0-02 code-simplifier PASS "simplification review accepted"`
 - `ralpha verdict FINAL-CLOSEOUT workflow-auditor PASS "workboard, rounds, acceptance, and state agree"`
 - `ralpha acceptance wait --slice FINAL-CLOSEOUT --roles architect,code-reviewer,code-simplifier,workflow-auditor`
-- `ralpha acceptance wait --slice P0-02 --roles architect,code-reviewer --tmux ralpha-P0-02-reviewer-a1b2 --log /tmp/ralpha-P0-02-reviewer-a1b2.log`
+- `ralpha acceptance wait --slice P0-02 --roles architect,code-reviewer,code-simplifier --tmux ralpha-P0-02-reviewer-a1b2 --log /tmp/ralpha-P0-02-reviewer-a1b2.log`
 - `ralpha trace show`
 - `ralpha workflow route --text "$ralpha update src/router.mjs with activation tests" --activate`
 - `ralpha workflow init --task "<task>"`

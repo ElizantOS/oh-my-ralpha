@@ -3,9 +3,10 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
+import { COMPANION_AGENT_PROMPTS } from './companions.mjs';
 import { doctorReport } from './doctor.mjs';
 import { dispatchNativeHook } from './native-hook.mjs';
-import { installedSkillDir } from './paths.mjs';
+import { installedAgentsDir, installedPromptsDir, installedSkillDir } from './paths.mjs';
 
 function encodeMessage(payload) {
   const body = Buffer.from(JSON.stringify(payload), 'utf-8');
@@ -128,6 +129,19 @@ export async function verifyInstallation({
         throw new Error('native hook did not return additionalContext');
       }
       return output.hookSpecificOutput.additionalContext;
+    }),
+    check('required_native_agents', async () => {
+      const missing = [];
+      for (const capability of COMPANION_AGENT_PROMPTS) {
+        const promptPath = join(installedPromptsDir(report.codexHome), `${capability.installName}.md`);
+        const agentPath = join(installedAgentsDir(report.codexHome), `${capability.installName}.toml`);
+        if (!existsSync(promptPath)) missing.push(promptPath);
+        if (!existsSync(agentPath)) missing.push(agentPath);
+      }
+      if (missing.length > 0) {
+        throw new Error(`missing native agent assets: ${missing.join(', ')}`);
+      }
+      return COMPANION_AGENT_PROMPTS.map((capability) => capability.installName);
     }),
     check('mcp_handshake', async () => {
       const scriptPath = findServerPath(configContent, 'ralpha');

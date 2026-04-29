@@ -282,17 +282,19 @@ Accepted path:
   "architect clean" --cwd "$SMOKE_CWD"
 /root/.codex/bin/ralpha verdict A-01 code-reviewer PASS \
   "reviewer clean" --cwd "$SMOKE_CWD"
+/root/.codex/bin/ralpha verdict A-01 code-simplifier PASS \
+  "simplifier clean" --cwd "$SMOKE_CWD"
 /root/.codex/bin/ralpha acceptance wait \
   --cwd "$SMOKE_CWD" \
   --slice A-01 \
-  --roles architect,code-reviewer \
+  --roles architect,code-reviewer,code-simplifier \
   --idle-ms 20 \
   --max-ms 200 \
   --poll-ms 5
 ```
 
-Expected: `status` is `accepted`, `roles` contains both requested roles, and
-`gate.has_blocking_reviewer_verdict` is `false`.
+Expected: `status` is `accepted`, `roles` contains all three required ordinary
+slice roles, and `gate.has_blocking_reviewer_verdict` is `false`.
 
 Blocked path:
 
@@ -475,18 +477,22 @@ Each subagent must only write append-only evidence:
 /root/.codex/bin/ralpha verdict TEAM-01 code-reviewer PASS \
   "code-reviewer native lane ran and appended smoke acceptance" \
   --cwd /tmp/ralpha-subagent-team-smoke
+/root/.codex/bin/ralpha verdict TEAM-01 code-simplifier PASS \
+  "code-simplifier native lane ran and appended smoke acceptance" \
+  --cwd /tmp/ralpha-subagent-team-smoke
 ```
 
 The final Codex TUI answer must state:
 
 - native subagent spawn was attempted
 - which roles actually ran
-- append-only records exist for `architect` and `code-reviewer`
+- append-only records exist for `architect`, `code-reviewer`, and `code-simplifier`
 - route readiness returned `finalSkill:"ralpha"` and `phase:"execution"`
 - final result is `PASS` or `DEGRADED`
 
 Passing evidence includes visible TUI lines like `Spawned ... [architect]`,
-`Spawned ... [code-reviewer]`, both agents completing, and durable records in
+`Spawned ... [code-reviewer]`, `Spawned ... [code-simplifier]`, all required
+ordinary-slice agents completing, and durable records in
 `/tmp/ralpha-subagent-team-smoke/.codex/oh-my-ralpha/working-model/state/acceptance-records.ndjson`.
 Do not accept a `PASS` self-assessment if the route readiness check reports
 `planningArtifactsComplete:false`; fix the temporary artifact schema and rerun
@@ -497,8 +503,9 @@ the route check first.
 Use this when the human must be able to attach to each reviewer. This is a
 different test from native subagents: the leader must create real container
 tmux sessions and launch plain Codex inside each session. If the result shows
-`Spawned ... [architect]` or `Spawned ... [code-reviewer]`, that was native
-subagent mode, not this inspectable tmux-backed mode.
+`Spawned ... [architect]`, `Spawned ... [code-reviewer]`, or
+`Spawned ... [code-simplifier]`, that was native subagent mode, not this
+inspectable tmux-backed mode.
 
 The main Codex prompt must require:
 
@@ -506,9 +513,10 @@ The main Codex prompt must require:
 Use tmux-cli-agent-harness. Do not spawn native subagents. Do not use codex exec.
 
 Create /tmp/ralpha-tmux-backed-team-smoke.
-Create two tmux sessions:
+Create three tmux sessions:
 - ralpha-CODEX-architect
 - ralpha-CODEX-code-reviewer
+- ralpha-CODEX-code-simplifier
 In each session, launch:
 codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox -C /workspace
 Paste a role-specific prompt into each reviewer Codex TUI.
@@ -522,6 +530,7 @@ Reviewer attach commands:
 ```bash
 docker exec -it oh-my-ralpha-codex-shell tmux attach -t ralpha-CODEX-architect
 docker exec -it oh-my-ralpha-codex-shell tmux attach -t ralpha-CODEX-code-reviewer
+docker exec -it oh-my-ralpha-codex-shell tmux attach -t ralpha-CODEX-code-simplifier
 ```
 
 When the leader drives the reviewer Codex TUI, paste prompts sequentially with
@@ -534,6 +543,9 @@ tmux paste-buffer -b architect_prompt -t ralpha-CODEX-architect
 
 printf '%s' "$CODE_REVIEWER_PROMPT" | tmux load-buffer -b code_reviewer_prompt -
 tmux paste-buffer -b code_reviewer_prompt -t ralpha-CODEX-code-reviewer
+
+printf '%s' "$CODE_SIMPLIFIER_PROMPT" | tmux load-buffer -b code_simplifier_prompt -
+tmux paste-buffer -b code_simplifier_prompt -t ralpha-CODEX-code-simplifier
 ```
 
 After a long prompt is pasted, `Enter`, `C-j`, and `M-Enter` may remain inside
@@ -546,6 +558,9 @@ tmux paste-buffer -b submit_architect -t ralpha-CODEX-architect
 
 printf '\r' | tmux load-buffer -b submit_code_reviewer -
 tmux paste-buffer -b submit_code_reviewer -t ralpha-CODEX-code-reviewer
+
+printf '\r' | tmux load-buffer -b submit_code_simplifier -
+tmux paste-buffer -b submit_code_simplifier -t ralpha-CODEX-code-simplifier
 ```
 
 Passing evidence for this tmux-backed mode:
@@ -554,8 +569,9 @@ Passing evidence for this tmux-backed mode:
 - `tmux list-panes` shows each reviewer session running `node` / `codex`
 - each reviewer transcript shows it ran only its verdict command
 - durable `acceptance-records.ndjson` has one `PASS` for `architect` and one
-  `PASS` for `code-reviewer`
-- `summarizeAcceptance` for the two roles reports `hasBlocking:false`
+  `PASS` for `code-reviewer` and one `PASS` for `code-simplifier`
+- `summarizeAcceptance` for the three required ordinary-slice roles reports
+  `hasBlocking:false`
 
 If the sessions were left open for inspection, the final report must say so and
 must include cleanup commands. After the human confirms inspection is complete,
@@ -564,6 +580,7 @@ clean up the reviewer sessions explicitly:
 ```bash
 docker exec -it oh-my-ralpha-codex-shell tmux kill-session -t ralpha-CODEX-architect
 docker exec -it oh-my-ralpha-codex-shell tmux kill-session -t ralpha-CODEX-code-reviewer
+docker exec -it oh-my-ralpha-codex-shell tmux kill-session -t ralpha-CODEX-code-simplifier
 docker exec -it oh-my-ralpha-codex-shell tmux list-sessions
 ```
 
@@ -578,7 +595,7 @@ assets, and durable verdict records.
 ```bash
 tmux new-session -d -s ralpha-docker-shell-inspector
 tmux send-keys -t ralpha-docker-shell-inspector \
-  'tmux capture-pane -pt ralpha-docker-shell-smoke:0 -S -260 | grep -E "Spawned|architect|code-reviewer|PASS|acceptance-records" -C 3' Enter
+  'tmux capture-pane -pt ralpha-docker-shell-smoke:0 -S -260 | grep -E "Spawned|architect|code-reviewer|code-simplifier|PASS|acceptance-records" -C 3' Enter
 tmux send-keys -t ralpha-docker-shell-inspector \
   'docker ps --filter name=oh-my-ralpha --format "{{.Names}} {{.Status}} {{.Command}}"' Enter
 tmux send-keys -t ralpha-docker-shell-inspector \
@@ -596,7 +613,7 @@ import { summarizeAcceptance } from "/root/.codex/skills/ralpha/src/acceptance.m
 const summary = await summarizeAcceptance({
   cwd: "/tmp/ralpha-subagent-team-smoke",
   sliceId: "TEAM-01",
-  roles: ["architect", "code-reviewer"],
+  roles: ["architect", "code-reviewer", "code-simplifier"],
 });
 console.log(JSON.stringify({
   latestRoles: Object.keys(summary.gate.latest_by_role).sort(),
@@ -606,8 +623,8 @@ console.log(JSON.stringify({
 NODE'
 ```
 
-Expected: latest roles are `architect` and `code-reviewer`, `hasBlocking` is
-`false`, and there are two reviewer records. It is normal for native subagent
+Expected: latest roles are `architect`, `code-reviewer`, and `code-simplifier`,
+`hasBlocking` is `false`, and there are three reviewer records. It is normal for native subagent
 processes to be gone after the leader closes them; durable verdict records and
 the tmux transcript are the evidence.
 
@@ -668,9 +685,10 @@ ralpha workflow route --text '$ralpha update src/router.mjs with activation test
 ralpha state read --mode ralpha
 ralpha verdict P0-02 architect PASS "accepted"
 ralpha verdict P0-02 code-reviewer CHANGES "edge case failed" --review-round 2 --review-lens edge/state/regression --review-cycle-id P0-02-loop
+ralpha verdict P0-02 code-simplifier PASS "simplification review accepted"
 ralpha verdict FINAL-CLOSEOUT workflow-auditor PASS "artifacts agree"
 ralpha acceptance wait --slice FINAL-CLOSEOUT --roles architect,code-reviewer,code-simplifier,workflow-auditor
-ralpha acceptance wait --slice P0-02 --roles architect,code-reviewer --tmux ralpha-P0-02-reviewer-a1b2 --log /tmp/ralpha-P0-02-reviewer-a1b2.log
+ralpha acceptance wait --slice P0-02 --roles architect,code-reviewer,code-simplifier --tmux ralpha-P0-02-reviewer-a1b2 --log /tmp/ralpha-P0-02-reviewer-a1b2.log
 ralpha trace show
 ```
 

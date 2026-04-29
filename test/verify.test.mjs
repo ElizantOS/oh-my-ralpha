@@ -33,7 +33,15 @@ describe('oh-my-ralpha verify command surface', () => {
     const checkNames = result.checks.map((entry) => entry.name);
     assert.ok(checkNames.includes('installed_cli'));
     assert.ok(checkNames.includes('native_hook_prompt_submit'));
+    assert.ok(checkNames.includes('required_native_agents'));
     assert.ok(checkNames.includes('mcp_handshake'));
+    const nativeAgents = result.checks.find((entry) => entry.name === 'required_native_agents');
+    assert.deepEqual(nativeAgents.detail, [
+      'architect',
+      'code-reviewer',
+      'code-simplifier',
+      'workflow-auditor',
+    ]);
     assert.equal(result.doctor.checks.mcpConfigured, true);
   });
 });

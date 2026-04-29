@@ -13,11 +13,18 @@
     "runtime_assertions": "detectKeywords('$ralpha continue the backlog') resolves to ralpha; natural-language continuation phrases do not activate without explicit $ralpha intent",
     "architect_verdict": "PASS for packaging readiness",
     "reviewer_verdict": "No findings. Ready for packaging.",
+    "code_simplifier_verdict": "PASS for simplification readiness.",
     "workflow_auditor_verdict": "PASS for workboard, rounds, acceptance evidence, and final state consistency"
   },
   "final_closeout_acceptance": {
     "slice_id": "FINAL-CLOSEOUT",
     "required_roles": ["architect", "code-reviewer", "code-simplifier", "workflow-auditor"],
+    "latest_by_role": {
+      "architect": "PASS",
+      "code-reviewer": "PASS",
+      "code-simplifier": "PASS",
+      "workflow-auditor": "PASS"
+    },
     "latest_verdict": "PASS"
   },
   "remaining_todos": [],

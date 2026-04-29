@@ -370,10 +370,27 @@ describe('oh-my-ralpha MCP integration', () => {
       params: {
         name: 'ralpha_acceptance',
         arguments: {
+          command: 'submit',
+          cwd,
+          sliceId: 'TEAM-01',
+          role: 'code-simplifier',
+          verdict: 'PASS',
+          summary: 'Simplification accepted.',
+        },
+      },
+    });
+
+    const acceptedResponse = await ralphaMcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: 4,
+      method: 'tools/call',
+      params: {
+        name: 'ralpha_acceptance',
+        arguments: {
           command: 'wait',
           cwd,
           sliceId: 'TEAM-01',
-          roles: ['architect', 'code-reviewer'],
+          roles: ['architect', 'code-reviewer', 'code-simplifier'],
           idleMs: 10,
           maxMs: 100,
           pollMs: 5,
@@ -381,11 +398,12 @@ describe('oh-my-ralpha MCP integration', () => {
       },
     });
 
-    const waited = unwrapTextResult(waitResponse);
+    assert.equal(unwrapTextResult(waitResponse).ok, true);
+    const waited = unwrapTextResult(acceptedResponse);
     assert.equal(waited.ok, true);
     assert.equal(waited.command, 'wait');
     assert.equal(waited.status, 'accepted');
-    assert.deepEqual(waited.roles, ['architect', 'code-reviewer']);
+    assert.deepEqual(waited.roles, ['architect', 'code-reviewer', 'code-simplifier']);
     assert.equal(waited.gate.has_blocking_reviewer_verdict, false);
   });
 

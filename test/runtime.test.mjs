@@ -333,6 +333,7 @@ describe('oh-my-ralpha standalone runtime', () => {
     try {
       await runCli(['verdict', 'TEAM-01', 'architect', 'PASS', 'architect accepted', '--cwd', cwd]);
       await runCli(['verdict', 'TEAM-01', 'code-reviewer', 'PASS', 'reviewer accepted', '--cwd', cwd]);
+      await runCli(['verdict', 'TEAM-01', 'code-simplifier', 'PASS', 'simplifier accepted', '--cwd', cwd]);
     } finally {
       console.log = originalLog;
     }
@@ -340,7 +341,7 @@ describe('oh-my-ralpha standalone runtime', () => {
     const result = await waitForAcceptance({
       cwd,
       sliceId: 'TEAM-01',
-      roles: ['architect', 'code-reviewer'],
+      roles: ['architect', 'code-reviewer', 'code-simplifier'],
       idleMs: 10,
       maxMs: 100,
       pollMs: 5,
@@ -348,7 +349,7 @@ describe('oh-my-ralpha standalone runtime', () => {
 
     assert.equal(result.status, 'accepted');
     assert.equal(result.gate.has_blocking_reviewer_verdict, false);
-    assert.deepEqual(result.roles, ['architect', 'code-reviewer']);
+    assert.deepEqual(result.roles, ['architect', 'code-reviewer', 'code-simplifier']);
   });
 
   it('waits for all four final-closeout reviewer PASS records', async () => {
@@ -511,6 +512,7 @@ describe('oh-my-ralpha standalone runtime', () => {
     try {
       await runCli(['verdict', 'TEAM-05', 'architect', 'PASS', 'architect accepted', '--cwd', cwd]);
       await runCli(['verdict', 'TEAM-05', 'code-reviewer', 'PASS', 'reviewer accepted', '--cwd', cwd]);
+      await runCli(['verdict', 'TEAM-05', 'code-simplifier', 'PASS', 'simplifier accepted', '--cwd', cwd]);
       await runCli([
         'acceptance',
         'wait',
@@ -519,7 +521,7 @@ describe('oh-my-ralpha standalone runtime', () => {
         '--slice',
         'TEAM-05',
         '--roles',
-        'architect,code-reviewer',
+        'architect,code-reviewer,code-simplifier',
         '--idle-ms',
         '10',
         '--max-ms',
@@ -533,7 +535,7 @@ describe('oh-my-ralpha standalone runtime', () => {
 
     const waited = JSON.parse(lines.at(-1));
     assert.equal(waited.status, 'accepted');
-    assert.deepEqual(waited.roles, ['architect', 'code-reviewer']);
+    assert.deepEqual(waited.roles, ['architect', 'code-reviewer', 'code-simplifier']);
   });
 
   it('rejects non-canonical verdict tokens', async () => {

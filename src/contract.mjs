@@ -13,6 +13,19 @@ export const RALPHA_TEAM_LANES = Object.freeze([
   'ai-slop-cleaner',
 ]);
 
+export const RALPHA_ORDINARY_ACCEPTANCE_ROLES = Object.freeze([
+  'architect',
+  'code-reviewer',
+  'code-simplifier',
+]);
+
+export const RALPHA_FINAL_CLOSEOUT_ROLES = Object.freeze([
+  'architect',
+  'code-reviewer',
+  'code-simplifier',
+  'workflow-auditor',
+]);
+
 export const RALPHA_REQUIRED_TRUTH_SOURCES = Object.freeze([
   '.codex/oh-my-ralpha/working-model/context/{task-slug}-{timestamp}.md',
   '.codex/oh-my-ralpha/working-model/state/{task-slug}-todo.md',

@@ -127,7 +127,7 @@
     },
     {
       "name": "ralpha_inspectable_codex_reviewers_submit",
-      "prompt": "Create an inspectable ralpha smoke where architect and code-reviewer each run inside their own tmux session with plain Codex TUI. Do not use native subagents. Submit long reviewer prompts reliably.",
+      "prompt": "Create an inspectable ralpha smoke where architect, code-reviewer, and code-simplifier each run inside their own tmux session with plain Codex TUI. Do not use native subagents. Submit long reviewer prompts reliably.",
       "expected": [
         "creates one tmux session per reviewer",
         "launches plain codex --no-alt-screen in each reviewer session",

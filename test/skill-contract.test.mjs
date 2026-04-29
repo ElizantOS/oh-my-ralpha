@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  RALPHA_FINAL_CLOSEOUT_ROLES,
+  RALPHA_ORDINARY_ACCEPTANCE_ROLES,
   RALPHA_REQUIRED_TRUTH_SOURCES,
   RALPHA_STATE_DEFAULTS,
   RALPHA_TEAM_LANES,
@@ -84,6 +86,20 @@ describe('oh-my-ralpha skill contract', () => {
     }
   });
 
+  it('defines exact ordinary and final acceptance role sets', () => {
+    assert.deepEqual(RALPHA_ORDINARY_ACCEPTANCE_ROLES, [
+      'architect',
+      'code-reviewer',
+      'code-simplifier',
+    ]);
+    assert.deepEqual(RALPHA_FINAL_CLOSEOUT_ROLES, [
+      'architect',
+      'code-reviewer',
+      'code-simplifier',
+      'workflow-auditor',
+    ]);
+  });
+
   it('documents user interruption scheduling while ralpha is active', () => {
     assert.match(skill, /User_Interruption_Protocol/);
     assert.match(skill, /later user messages are insertions into the active workflow/i);
@@ -113,9 +129,11 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(skill, /\$ralpha`? invocation as explicit user intent/i);
     assert.match(skill, /Each completed slice has fresh evidence/i);
     assert.match(skill, /Every completed ordinary slice must run all three native subagent lanes/i);
-    assert.match(skill, /Do not downgrade to a single `code-reviewer` lane for ordinary slices/i);
+    assert.match(skill, /Do not mark an ordinary slice complete with only a single `code-reviewer` lane/i);
+    assert.match(skill, /run at most two active acceptance agents concurrently for ordinary slices/i);
     assert.match(skill, /all three latest required verdicts must be accepted or explicitly degraded with evidence/i);
     assert.match(skill, /TODO review-fix convergence loop/i);
+    assert.match(skill, /Every completed TODO\/slice must run the full required acceptance bundle after fresh proof/i);
     assert.match(skill, /three blocking review-fix rounds/i);
     assert.match(skill, /original TODO diff[\s\S]*previous reviewer findings[\s\S]*fix diff[\s\S]*fresh proof/i);
     assert.match(skill, /escalated_review/i);
@@ -141,6 +159,7 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(skill, /Each completed slice has recorded mandatory three-lane acceptance/i);
     assert.match(skill, /ai-slop-cleaner.*--no-deslop/i);
     assert.match(skill, /Post-deslop regression passed/i);
+    assert.match(skill, /Final closeout adds a fourth read-only lane: `workflow-auditor`/i);
     assert.match(skill, /`Stop` hook is a cleanup guard, not a verification lane/i);
     assert.match(skill, /current_phase: "awaiting_plan_review"/i);
     assert.match(skill, /only active non-terminal phase that may end a turn/i);

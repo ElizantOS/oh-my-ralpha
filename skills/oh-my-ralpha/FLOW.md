@@ -54,10 +54,11 @@ This skill is Ralph specialized for the workflow that actually worked during the
    - Architect always reviews slice boundaries, architecture, integration risk, and cross-module impact.
    - Code-reviewer always reviews correctness, tests, edge cases, and request fit.
    - Code-simplifier always reviews maintainability and simplification opportunities in read-only mode.
-   - Every TODO must run at least one review after fresh proof. `CHANGES`/`REJECT` starts a bounded review-fix loop: fix, rerun proof, then review again.
+   - Every TODO must run the full required acceptance bundle after fresh proof. `CHANGES`/`REJECT` starts a bounded review-fix loop: fix, rerun proof, then repeat the affected required lane.
    - Review-fix loops are capped at three blocking rounds before `escalated_review`: round 1 checks spec/correctness, round 2 checks edge cases/state/regression, and round 3 checks tests/maintainability/cleanup debt.
    - Fix-review prompts include the original TODO diff, previous findings, the fix diff, and fresh proof so each round can judge convergence instead of only the newest patch.
    - Ordinary slices must not complete after only one or two acceptance lanes. All three latest required verdicts must be accepted or explicitly degraded with evidence.
+   - Preserve bounded launch behavior: default to serial lanes when host limits are unclear, run at most two active acceptance agents concurrently for ordinary slices, and record why if concurrency is expanded.
    - Final closeout adds workflow-auditor: when all TODOs are complete and no active slice/next todo remains, run four independent read-only lanes for `FINAL-CLOSEOUT`: architect, code-reviewer, code-simplifier, and workflow-auditor.
    - Timeout handling must consume append-only reviewer evidence before degrading: if a timed-out reviewer has appended `CHANGES` or `REJECT`, that verdict blocks leader/manual `PASS` until fixed or explicitly scheduled with fresh proof.
    - Native wait timeouts are observation timeouts, not proof that the reviewer stopped. When tmux or transcript evidence exists, use tmux-aware acceptance wait semantics: `accepted` when required reviewer roles have latest `PASS`, `blocked` when latest reviewer evidence is `CHANGES`/`REJECT`, `activity_reset` whenever pane/transcript/acceptance output changes, `idle_timeout` only after continuous inactivity, and `max_timeout` after the total budget.

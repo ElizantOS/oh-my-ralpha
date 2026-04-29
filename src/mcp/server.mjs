@@ -236,7 +236,7 @@ function ralphaAcceptanceTool() {
         command: { type: 'string', enum: ['submit', 'list', 'wait'] },
         sliceId: { type: 'string', description: 'Required for command=submit/wait. Active slice id such as P0-02.' },
         role: { type: 'string', description: 'Required for command=submit. architect, code-reviewer, code-simplifier, workflow-auditor, leader, or manual.' },
-        roles: { type: 'array', description: 'Only for command=wait/list. Reviewer roles to wait for, e.g. ["architect","code-reviewer"].' },
+        roles: { type: 'array', description: 'Only for command=wait/list. Reviewer roles to wait for. Ordinary slice acceptance requires ["architect","code-reviewer","code-simplifier"]; FINAL-CLOSEOUT also includes "workflow-auditor".' },
         verdict: { type: 'string', description: 'Required for command=submit. Exact token: PASS, CHANGES, REJECT, or COMMENT.' },
         summary: { type: 'string', description: 'Short acceptance summary.' },
         findings: { type: 'array', description: 'Optional findings. May contain strings or structured JSON objects.' },
