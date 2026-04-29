@@ -36,6 +36,13 @@ describe('oh-my-ralpha truth-source examples', () => {
     assert.equal(roundsLedger.final_verdict, 'PASS');
     assert.equal(roundsLedger.next_todo, null);
     assert.deepEqual(roundsLedger.remaining_todos, []);
+    for (const todo of roundsLedger.completed_todos) {
+      assert.deepEqual(roundsLedger.ordinary_slice_acceptance[todo], {
+        architect: 'PASS',
+        'code-reviewer': 'PASS',
+        'code-simplifier': 'PASS',
+      });
+    }
     assert.match(roundsLedger.verification_evidence.skill_validation, /repo-skill-ok/);
     assert.match(roundsLedger.verification_evidence.runtime_assertions, /\$ralpha/);
     assert.match(roundsLedger.verification_evidence.runtime_assertions, /resolves to ralpha/);

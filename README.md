@@ -521,7 +521,7 @@ In each session, launch:
 codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox -C /workspace
 Paste a role-specific prompt into each reviewer Codex TUI.
 Each reviewer may only run its append-only ralpha verdict command.
-Leave both sessions open for human inspection.
+Leave all three reviewer sessions open for human inspection.
 Verify TEAM-TMUX with summarizeAcceptance before reporting PASS.
 ```
 
@@ -686,6 +686,9 @@ ralpha state read --mode ralpha
 ralpha verdict P0-02 architect PASS "accepted"
 ralpha verdict P0-02 code-reviewer CHANGES "edge case failed" --review-round 2 --review-lens edge/state/regression --review-cycle-id P0-02-loop
 ralpha verdict P0-02 code-simplifier PASS "simplification review accepted"
+ralpha verdict FINAL-CLOSEOUT architect PASS "architecture closeout accepted"
+ralpha verdict FINAL-CLOSEOUT code-reviewer PASS "code review closeout accepted"
+ralpha verdict FINAL-CLOSEOUT code-simplifier PASS "simplification closeout accepted"
 ralpha verdict FINAL-CLOSEOUT workflow-auditor PASS "artifacts agree"
 ralpha acceptance wait --slice FINAL-CLOSEOUT --roles architect,code-reviewer,code-simplifier,workflow-auditor
 ralpha acceptance wait --slice P0-02 --roles architect,code-reviewer,code-simplifier --tmux ralpha-P0-02-reviewer-a1b2 --log /tmp/ralpha-P0-02-reviewer-a1b2.log

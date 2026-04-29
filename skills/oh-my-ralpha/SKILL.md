@@ -282,6 +282,9 @@ When external runtime tooling is unavailable, use the built-in JS runtime shippe
 - `ralpha verdict P0-02 code-reviewer CHANGES "ctx type mismatch"`
 - `ralpha verdict P0-02 code-reviewer CHANGES "edge case failed" --review-round 2 --review-lens edge/state/regression --review-cycle-id P0-02-loop`
 - `ralpha verdict P0-02 code-simplifier PASS "simplification review accepted"`
+- `ralpha verdict FINAL-CLOSEOUT architect PASS "architecture closeout accepted"`
+- `ralpha verdict FINAL-CLOSEOUT code-reviewer PASS "code review closeout accepted"`
+- `ralpha verdict FINAL-CLOSEOUT code-simplifier PASS "simplification closeout accepted"`
 - `ralpha verdict FINAL-CLOSEOUT workflow-auditor PASS "workboard, rounds, acceptance, and state agree"`
 - `ralpha acceptance wait --slice FINAL-CLOSEOUT --roles architect,code-reviewer,code-simplifier,workflow-auditor`
 - `ralpha acceptance wait --slice P0-02 --roles architect,code-reviewer,code-simplifier --tmux ralpha-P0-02-reviewer-a1b2 --log /tmp/ralpha-P0-02-reviewer-a1b2.log`

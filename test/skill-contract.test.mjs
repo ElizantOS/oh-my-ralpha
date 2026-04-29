@@ -214,6 +214,9 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(codeSimplifierPrompt, /Review-Only Default/i);
     assert.match(codeSimplifierPrompt, /`WRITE_MODE_ALLOWED`/);
     assert.match(codeSimplifierPrompt, /Unauthorized edits/i);
+    assert.match(architectPrompt, /ralpha verdict <slice> architect <PASS\|CHANGES\|REJECT\|COMMENT> "summary"/);
+    assert.match(codeSimplifierPrompt, /ralpha verdict <slice> code-simplifier <PASS\|CHANGES\|REJECT\|COMMENT> "summary"/);
+    assert.match(codeSimplifierPrompt, /no meaningful simplification is needed/i);
     assert.match(workflowAuditorPrompt, /You are Workflow Auditor/i);
     assert.match(workflowAuditorPrompt, /FINAL-CLOSEOUT/i);
   });
@@ -300,6 +303,10 @@ describe('oh-my-ralpha skill contract', () => {
     assert.match(skill, /ralpha state read/i);
     assert.match(skill, /ralpha verdict P0-02 architect PASS/i);
     assert.match(skill, /ralpha verdict P0-02 code-reviewer CHANGES/i);
+    assert.match(skill, /ralpha verdict P0-02 code-simplifier PASS/i);
+    assert.match(skill, /ralpha verdict FINAL-CLOSEOUT architect PASS/i);
+    assert.match(skill, /ralpha verdict FINAL-CLOSEOUT code-reviewer PASS/i);
+    assert.match(skill, /ralpha verdict FINAL-CLOSEOUT code-simplifier PASS/i);
     assert.match(skill, /ralpha verdict FINAL-CLOSEOUT workflow-auditor PASS/i);
     assert.match(skill, /--review-round 2 --review-lens edge\/state\/regression --review-cycle-id P0-02-loop/i);
     assert.match(skill, /ralpha acceptance wait --slice FINAL-CLOSEOUT --roles architect,code-reviewer,code-simplifier,workflow-auditor/i);

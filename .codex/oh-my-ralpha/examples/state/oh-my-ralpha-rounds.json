@@ -6,6 +6,14 @@
   "completed_todos": ["R-01", "R-02", "R-03", "R-04", "R-05", "R-06"],
   "next_todo": null,
   "blocked_todos": [],
+  "ordinary_slice_acceptance": {
+    "R-01": {"architect": "PASS", "code-reviewer": "PASS", "code-simplifier": "PASS"},
+    "R-02": {"architect": "PASS", "code-reviewer": "PASS", "code-simplifier": "PASS"},
+    "R-03": {"architect": "PASS", "code-reviewer": "PASS", "code-simplifier": "PASS"},
+    "R-04": {"architect": "PASS", "code-reviewer": "PASS", "code-simplifier": "PASS"},
+    "R-05": {"architect": "PASS", "code-reviewer": "PASS", "code-simplifier": "PASS"},
+    "R-06": {"architect": "PASS", "code-reviewer": "PASS", "code-simplifier": "PASS"}
+  },
   "verification_evidence": {
     "build": "npm run build passed in the source oh-my-codex packaging workspace",
     "targeted_tests": "targeted skill contract and routing checks passed before extraction",

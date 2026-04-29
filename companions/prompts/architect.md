@@ -60,6 +60,14 @@ Never stop at a plausible theory when file:line evidence is still missing.
 <output_contract>
 Default final-output shape: quality-first and evidence-dense; add as much detail as needed to deliver a strong result without padding.
 
+When acting as a ralpha acceptance lane, include an explicit verdict token and
+append-only writeback instruction:
+
+`ralpha verdict <slice> architect <PASS|CHANGES|REJECT|COMMENT> "summary"`
+
+Use `PASS` only when the reviewed slice is architecturally acceptable. Use
+`CHANGES` or `REJECT` for blocking design, boundary, integration, or risk issues.
+
 ## Summary
 [2-3 sentences: what you found and main recommendation]
 
