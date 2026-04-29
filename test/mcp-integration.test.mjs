@@ -122,6 +122,34 @@ describe('oh-my-ralpha MCP integration', () => {
     assert.equal(unwrapTextResult(readResponse).state, null);
   });
 
+  it('rejects unified state writes from manual or unknown roles', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'oh-my-ralpha-unified-state-manual-guard-'));
+    for (const actorRole of ['manual', 'other-role']) {
+      const response = await ralphaMcpServer.handleRequest({
+        jsonrpc: '2.0',
+        id: actorRole,
+        method: 'tools/call',
+        params: {
+          name: 'ralpha_state',
+          arguments: {
+            command: 'write',
+            cwd,
+            mode: 'ralpha',
+            actorRole,
+            mutationReason: 'attempt non-leader state mutation',
+            patch: {
+              active: true,
+              current_phase: 'executing',
+            },
+          },
+        },
+      });
+      const blocked = unwrapTextResult(response);
+      assert.equal(blocked.ok, false);
+      assert.match(blocked.error, /actorRole must be "leader"/);
+    }
+  });
+
   it('allows acceptance subagents to append information without mutating state', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'oh-my-ralpha-unified-append-only-'));
     const appendResponse = await ralphaMcpServer.handleRequest({

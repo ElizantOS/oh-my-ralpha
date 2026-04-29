@@ -65,6 +65,20 @@ export function validateStateMutation({
     };
   }
 
+  if (requireActor && role !== 'leader') {
+    return {
+      ok: false,
+      error: 'actorRole must be "leader" for state write/clear. Manual, acceptance, reviewer, and unknown roles may read state or append verdict/trace information, but must not mutate ralpha state.',
+    };
+  }
+
+  if (requireActor && !safeText(mutationReason)) {
+    return {
+      ok: false,
+      error: 'mutationReason is required for state write/clear. The leader/main thread must record why it is changing ralpha state.',
+    };
+  }
+
   if (command === 'write' && readPatchPhase(patch) === 'awaiting_user') {
     return {
       ok: false,

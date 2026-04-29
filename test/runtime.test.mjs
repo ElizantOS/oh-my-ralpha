@@ -163,6 +163,14 @@ describe('oh-my-ralpha standalone runtime', () => {
       () => runCli(['state', 'write', '--cwd', cwd, '--mode', 'ralpha', '--json', '{"active":true}']),
       /actorRole is required/,
     );
+    await assert.rejects(
+      () => runCli(['state', 'write', '--cwd', cwd, '--mode', 'ralpha', '--actor', 'manual', '--reason', 'manual write', '--json', '{"active":true}']),
+      /actorRole must be "leader"/,
+    );
+    await assert.rejects(
+      () => runCli(['state', 'write', '--cwd', cwd, '--mode', 'ralpha', '--actor', 'leader', '--json', '{"active":true}']),
+      /mutationReason is required/,
+    );
 
     const originalLog = console.log;
     const lines = [];

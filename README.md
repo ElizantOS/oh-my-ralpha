@@ -272,7 +272,7 @@ not the source checkout fallback.
 
 ```bash
 /root/.codex/bin/ralpha verify --scope user
-SMOKE_CWD=$(mktemp -d /tmp/ralpha-wait-smoke-XXXXXX)
+export SMOKE_CWD=$(mktemp -d /tmp/ralpha-wait-smoke-XXXXXX)
 ```
 
 Accepted path:
