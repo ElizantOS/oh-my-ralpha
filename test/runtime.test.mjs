@@ -156,6 +156,40 @@ describe('oh-my-ralpha standalone runtime', () => {
     assert.equal(await readModeState({ cwd, mode: 'ralpha' }), null);
   });
 
+  it('clears orphaned session bootstrap state when workspace state is cleared', async () => {
+    const cwd = await makeTempWorkspace('oh-my-ralpha-state-orphan-session-');
+    await writeModeState({
+      cwd,
+      mode: 'ralpha',
+      sessionId: 'stale-session',
+      patch: {
+        active: true,
+        current_phase: 'starting',
+      },
+    });
+    await writeModeState({
+      cwd,
+      mode: 'ralpha',
+      sessionId: 'real-session',
+      patch: {
+        active: true,
+        current_phase: 'executing',
+        state: {
+          current_slice: 'P0-04',
+          next_todo: 'P0-04',
+        },
+      },
+    });
+
+    const cleared = await clearModeState({ cwd, mode: 'ralpha' });
+
+    assert.equal(cleared, true);
+    assert.equal(await readModeState({ cwd, mode: 'ralpha', sessionId: 'stale-session' }), null);
+    const realSession = await readModeState({ cwd, mode: 'ralpha', sessionId: 'real-session' });
+    assert.equal(realSession.active, true);
+    assert.equal(realSession.state.current_slice, 'P0-04');
+  });
+
   it('requires leader actor for CLI state mutations', async () => {
     const cwd = await makeTempWorkspace('oh-my-ralpha-state-cli-guard-');
 

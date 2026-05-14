@@ -1,4 +1,4 @@
-import { rm } from 'node:fs/promises';
+import { readdir, readFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { workingModelStateDir } from './paths.mjs';
@@ -39,6 +39,59 @@ function safeText(value) {
 function readPatchPhase(patch) {
   if (!patch || typeof patch !== 'object') return '';
   return safeText(patch.current_phase || patch.currentPhase);
+}
+
+function readNestedState(state) {
+  return state?.state && typeof state.state === 'object' && !Array.isArray(state.state)
+    ? state.state
+    : {};
+}
+
+function hasResumeTarget(state) {
+  const nested = readNestedState(state);
+  return Boolean(
+    safeText(nested.next_todo)
+    || safeText(nested.current_slice)
+    || safeText(state?.next_todo)
+    || safeText(state?.current_slice),
+  );
+}
+
+function isOrphanedBootstrapState(state) {
+  return state?.active === true
+    && safeText(state.current_phase).toLowerCase() === 'starting'
+    && !hasResumeTarget(state);
+}
+
+async function readJsonIfReadable(path) {
+  try {
+    return JSON.parse(await readFile(path, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
+
+export async function clearOrphanedSessionModeStates({ cwd, mode }) {
+  const sessionsDir = join(workingModelStateDir(cwd), 'sessions');
+  let cleared = 0;
+  let entries = [];
+  try {
+    entries = await readdir(sessionsDir, { withFileTypes: true });
+  } catch {
+    return cleared;
+  }
+
+  await Promise.all(entries
+    .filter((entry) => entry.isDirectory())
+    .map(async (entry) => {
+      const statePath = getModeStatePath(cwd, mode, entry.name);
+      const state = await readJsonIfReadable(statePath);
+      if (!isOrphanedBootstrapState(state)) return;
+      await rm(statePath, { force: true });
+      cleared += 1;
+    }));
+
+  return cleared;
 }
 
 export function validateStateMutation({
@@ -126,7 +179,12 @@ export async function writeModeState({
 
 export async function clearModeState({ cwd, mode, sessionId }) {
   const statePath = getModeStatePath(cwd, mode, sessionId);
-  if (!existsSync(statePath)) return false;
-  await rm(statePath, { force: true });
-  return true;
+  const primaryExists = existsSync(statePath);
+  if (primaryExists) {
+    await rm(statePath, { force: true });
+  }
+  const orphanedSessionsCleared = sessionId
+    ? 0
+    : await clearOrphanedSessionModeStates({ cwd, mode });
+  return primaryExists || orphanedSessionsCleared > 0;
 }
